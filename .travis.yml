@@ -1,0 +1,51 @@
+language: node_js
+
+node_js:
+- '5.4'
+
+cache:
+  directories:
+  - node_modules
+  - "$HOME/.npm"
+  - "$HOME/.gem"
+
+before_install:
+- npm install -g gulp
+
+script:
+- gulp test
+- gulp
+
+#TODO BRN: Modify all code below this line to match deployment of this project
+before_deploy:
+- zip -r latest *
+- mkdir -p dpl_cd_upload
+- mv latest.zip dpl_cd_upload/latest.zip
+
+deploy:
+- provider: npm
+  email: npm@airbug.com
+  skip_cleanup: true
+  on:
+    tags: true
+  api_key:
+    #TODO BRN: Add correct api key for this private repo
+    #secure: giiG6oQP/3XgSWrz335M+Kv166XH5wea+QVqyyUwFgFYkRuRnZn+8ef0czNNNxaLnqELb8sYLHiVKmporS5X7yR425d34ogOAFGhSVj/VG6OVvxzyQI2s1D5fZXA6JUAEYrSHuD6uGP0SFWfsRrD7qmBKk2wmRgG4Hkvo2JcxBjVBP7tr0puFT7kmNx89TWefGfbGL3ziLoITA9en/jeVSmG3JPuU+steAOpYxqfyqhXYaYICD5392nqwDSW47VQpjS3FaitaBHzRlFR15nk4zQYSfjjBlRLwjHOAxldos8/uGaCAO80nfVUNRAcbul1RilKKjXzOAkw990KE7A6oXnUX/DCxU/GSvJFzD+uEzV9rdIdpL5gzkArVsCzLVGNJwD9Gq5Jo7u4RkJnseyOKh3PEv0qdqeeBzwXwtaKECDlcECA9dBtVF4PB7VYvW4yVPgyt5vZKDHw1SBV6qBLs4bcX8wdA6w2pByUqagL61JgKZ1ikR2ojXVTTb4uUroW/b07fIVj/H/PLqNY/XOVGJtVjiXxzGZThf7XmbitJ3gksQo9yn8an61B1h4USUJNm9c5YoYWjaBDhDHMYaxfantmQ3xj/0E+Eg5L2NMk1v6G8L37BlZ6kxEwcvp+RAWs9vYsvep/HDOOcB18wAAE+k2GrvJksTAqZ2n2wD02Jfw=
+- provider: s3
+  access_key_id: AKIAJ4XZHIMNKP3WGGHQ
+  secret_access_key: &1
+    secure: F3pFbaxwO+/wSVoulVNzG7YoUxYIoAN2voWuTMQr0L7of2DkjJx73xguPL4l+DnpQhtPEFCk7Fn+taF7FjtQuYBVXQkuM+9aaPW2PU+fvxLYck598dSCKJuKuMGJzK9njlg6tfZdeDrPm+hep+xN4NRXO3iBIKEP18sljjpk8d6Q5DtpTUacAzfErkadvbYYV3lb58QWFCNEEY8/t6rEnol0xJw3iF+mAjeqRXL6f9sHY41aGspF98ec5xJZGUdIsxGaA5cCCekSpWdxz2wyOIZqoZvHVNhhP+VG5kDRgVdiBBRQSJ+iA7bEkZaMfl04Jre4uOYSnx1Xy/041lgtW8HUieGfYUZYgjtDhHjloT3KvY6RXmfGkkGDwuYxMDPCmW3TVIsZeAsEjXK+vrxlYlzKz12uB5TqFm1ukNzQHx/Ik/PzNa8FYW+Jrn1gOKw2zj9XNKnZyvr7thlwIspEXZP7KW3+RMgwSCgA6kDJh4FauG+YMyjZ9tCF0Wsst3TeeDTVR9b/sK8CRGeG74dv4T3KvHNrQc6b6vMOY6ZoCmlkSyTLArY7ZJNVBkYV6V5lOngqI0Bzot6VLoFg/PwL0j+74Dbqv5FavwnDrMY2rsqlyqyT3aBVS9dZ9nptcsTQSkU/ekWSTuBxwrWs3ouPotdysRgL4NeZJRmkIDhyM3E=
+  local_dir: dpl_cd_upload
+  skip_cleanup: true
+  on: &2
+    repo: travis-ci/cat-party
+  bucket: catparty-codedeploy
+- provider: codedeploy
+  access_key_id: AKIAJ4XZHIMNKP3WGGHQ
+  secret_access_key: *1
+  bucket: catparty-codedeploy
+  key: latest.zip
+  bundle_type: zip
+  application: CatPartyDemoApplication
+  deployment_group: ProductionDemoFleet
+  on: *2

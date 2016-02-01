@@ -1,0 +1,368 @@
+//-------------------------------------------------------------------------------
+// Emails
+//-------------------------------------------------------------------------------
+
+path /emails/$emailId is Email {
+    read() = doesCurrentUserOwnObject(this) || doesNotExist(this) || isCurrentUserAdmin();
+    write() = isOwnedByOrDoesNotExistAndWillBeOwnedByCurrentUser(this) || isCurrentUserAdmin();
+    validate() = isEmailId($emailId);
+}
+
+path /emails/$emailId/id {
+    validate() = this == $emailId && this == convertEmailToEmailId(this.parent().email);
+}
+
+type Email extends Entity {
+    email: EmailField,
+    primary: Boolean,
+    userId: UserId
+}
+
+type EmailField extends String {
+  validate() = isEmailString(this);
+}
+
+type EmailId extends String {
+    validate() = isEmailId(this);
+}
+
+type ExistingEmailId extends String {
+    validate() = isExistingEmailId(this);
+}
+
+function isEmailId(value) {
+    return isId(value);
+}
+
+function isEmailString(value) {
+    return value.isString() && value.length <= 254 && value.test(/^[-!#$%&'*+\/0-9=?A-Z^_a-z{|}~](\.?[-!#$%&'*+\/0-9=?A-Z^_a-z`{|}~])*@[a-zA-Z0-9](-?\.?[a-zA-Z0-9])*(\.[a-zA-Z](-?[a-zA-Z0-9])*)+$/);
+}
+
+function isExistingEmailId(value) {
+    return isEmailId(value) && root.emails[value] != null;
+}
+
+
+//-------------------------------------------------------------------------------
+// IndexUserIdToEmailIds
+//-------------------------------------------------------------------------------
+
+path /indexUserIdToEmailIds/$userId {
+  read() = isCurrentUserId($userId) || isCurrentUserAdmin();
+  write() = isCurrentUserId($userId) || isCurrentUserAdmin();
+  validate() {
+    return isExistingUserId($userId);
+  }
+}
+
+path /indexUserIdToEmailIds/$userId/$emailId is ExistingEmailId {
+  validate() {
+    return this == $emailId;
+  }
+}
+
+
+//-------------------------------------------------------------------------------
+// IndexUsernameToUserId
+//-------------------------------------------------------------------------------
+
+path /indexUsernameToUserId {
+    read() = true;
+}
+
+path /indexUsernameToUserId/$username  {
+    write() {
+        return (
+            doesNotExist(this) || isCurrentUserId(prior(this))
+        ) && (
+            isCurrentUserId(this) || willNotExist(this)
+        ) || (
+            isCurrentUserAdmin()
+        );
+    }
+    validate() = isUsername($username) && isExistingUserId(this);
+}
+
+
+//-------------------------------------------------------------------------------
+// Recipes
+//-------------------------------------------------------------------------------
+
+path /recipes/gulp/public/ {
+    read() = true;
+}
+
+path /recipes/gulp/public/$recipeName is Recipe {
+    write() = doesNotExist(this) || isCurrentUserRecipeOwner($recipeName) || isCurrentUserAdmin();
+}
+
+path /recipes/gulp/public/$recipeName/name {
+    validate() = this == $recipeName;
+}
+
+path /recipes/gulp/public/$recipeName/lastPublishedVersion {
+    write() = isCurrentUserRecipeCollaborator($recipeName);
+    validate() {
+        return isExistingRecipeVersionNumber(recipeName, this) || (
+            doesNotExist(this.parent) && this == ''
+        )
+    }
+}
+
+type Recipe {
+    createdAt: Number,
+    name: RecipeName,
+    lastPublishedVersion: String,
+    updatedAt: Number
+}
+
+type RecipeName extends String {
+    validate() = isRecipeName(this);
+}
+
+function isRecipeName(value) {
+    return value.test(/^[a-z]+(?:[a-z0-9-][a-z0-9]+)*$/);
+}
+
+
+//-------------------------------------------------------------------------------
+// RecipeCollaborators
+//-------------------------------------------------------------------------------
+
+path /recipes/gulp/public/$recipeName/collaborators/$userId is RecipeCollaborator {
+    validate() = isExistingUserId($userId);
+}
+
+path /recipes/gulp/public/$recipeName/collaborators/$userId/userId {
+    validate() = this == $userId;
+}
+
+type RecipeCollaborator {
+    createdAt: Number,
+    owner: Boolean,
+    updatedAt: Number,
+    userId: ExistingUserId
+}
+
+function isCurrentUserRecipeCollaborator(recipeName) {
+    return isUserRecipeCollaborator(auth.uid, recipeName);
+}
+
+function isCurrentUserRecipeOwner(recipeName) {
+    return isUserRecipeOwner(auth.uid, recipeName);
+}
+
+function isUserRecipeCollaborator(userId, recipeName) {
+    return root.recipes.public[recipeName].collaborators[userId] !== null;
+}
+
+function isUserRecipeOwner(userId, recipeName) {
+    return root.recipes.public[recipeName].collaborators[userId].owner === true;
+}
+
+
+//-------------------------------------------------------------------------------
+// RecipeVersions
+//-------------------------------------------------------------------------------
+
+path /recipes/gulp/public/$recipeName/versions/$recipeVersionNumber is RecipeVersion {
+    //TODO BRN: Replace '-' with '.' in recipeVersionNumber
+    validate() = isRecipeVersionNumber($recipeVersionNumber);
+    write() {
+        return (
+            doesNotExist(this) && isCurrentUserRecipeCollaborator(this)
+        ) || (
+            isCurrentUserRecipeOwner(this)
+        ) || (
+            isCurrentUserAdmin()
+        );
+    }
+}
+
+type RecipeVersion {
+    createdAt: Number,
+    published: Boolean,
+    recipeUrl: String,
+    updatedAt: Number,
+    versionNumber: RecipeVersionNumber
+}
+
+path /recipes/gulp/public/$recipeName/versions/$recipeVersionNumber/versionNumber {
+    validate() = this == $recipeVersionNumber;
+}
+
+type RecipeVersionNumber extends String {
+    validate() = isRecipeVersionNumber(this);
+}
+
+function isExistingRecipeVersionNumber(recipeName, value) {
+    return isRecipeVersionNumber(value) && root.recipes.public[recipeName].versions[value] != null;
+}
+
+function isRecipeVersionNumber(value) {
+    return value.test(/^[0-9]\.[0-9]\.[0-9]$/);
+}
+
+
+//-------------------------------------------------------------------------------
+// Roles
+//-------------------------------------------------------------------------------
+
+path /roles/$userId is Role {
+    read() = isCurrentUserId($userId) || isCurrentUserAdmin();
+    write() = isCurrentUserAdmin();
+    validate() = isExistingUserId($userId);
+}
+
+type Role extends Entity {
+    role: RoleString | EmptyString,
+    userId: ExistingUserId
+}
+
+type RoleString extends String {
+    validate() = this == 'admin';
+}
+
+function isCurrentUserAdmin() {
+    return root.roles[auth.uid].role == 'admin';
+}
+
+
+//-------------------------------------------------------------------------------
+// Users
+//-------------------------------------------------------------------------------
+
+path /users {
+    read() = true;
+}
+
+path /users/$userId is User | EmptyPush {
+    write() = isCurrentUserId($userId) || isCurrentUserAdmin();
+}
+
+type User extends Entity  {
+    username: Username
+}
+
+type UserId extends Id {
+    validate() = isUserId(this);
+}
+
+type ExistingUserId extends String {
+    validate() = isExistingUserId(this);
+}
+
+type Username extends String {
+    validate() = isUsername(this);
+}
+
+type ExistingUsername extends String {
+    validate() = isExistingUsername(this);
+}
+
+function isCurrentUserId(userId) {
+    return auth.uid === userId;
+}
+
+function hasUserId(object) {
+    return object.userId !== null;
+}
+
+function isAuthenticated() {
+    return auth != null;
+}
+
+function isExistingUserId(value) {
+    return isUserId(value) && root.users[value] != null;
+}
+
+function isExistingUsername(value) {
+    return isUsername(value) && root.indexUsernameToUserId[value] != null;
+}
+
+function isUserId(value) {
+    return isId(value);
+}
+
+function isUsername(value) {
+    return value.test(/^[a-z]+(?:[a-z0-9-][a-z0-9]+)*$/);
+}
+
+function doesCurrentUserOwnObject(object) {
+    return isCurrentUserId(prior(object).userId);
+}
+
+function isOwnedByOrDoesNotExistAndWillBeOwnedByCurrentUser(object) {
+    return (
+        doesCurrentUserOwnObject(object) || doesNotExist(object)
+    ) && (
+        willCurrentUserOwnObject(object)
+    );
+}
+
+function willCurrentUserOwnObject(object) {
+    return isCurrentUserId(object.userId);
+}
+
+
+//-------------------------------------------------------------------------------
+// Util
+//-------------------------------------------------------------------------------
+
+type Array<T> {
+    $index: ArrayIndex<T>
+}
+
+type ArrayIndex<T> extends T {
+    validate() = isNumberString($index);
+}
+
+type Entity {
+    createdAt: Number,
+    id: Id,
+    updatedAt: Number
+}
+
+type EmptyPush {
+    validate() = isEmptyPush(this);
+}
+
+type EmptyString extends String {
+    validate() = this == "";
+}
+
+type Id extends String {
+    validate() = isId(this);
+}
+
+function doesExist(value) {
+    return prior(value) != null;
+}
+
+function doesNotExist(value) {
+    return prior(value) == null;
+}
+
+function isEmptyPush(value) {
+    return doesNotExistAndWillNotExist(value);
+}
+
+function isId(value) {
+    return value.test(/^-[a-zA-Z0-9_-]+$/);
+}
+
+function isNumberString(value) {
+    return value.test(/^[0-9]+$/);
+}
+
+function doesNotExistAndWillNotExist(value) {
+    return (doesNotExist(value) && willNotExist(value));
+}
+
+function willExist(value) {
+    return value != null;
+}
+
+function willNotExist(value) {
+    return value == null;
+}

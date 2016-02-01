@@ -1,0 +1,21 @@
+{
+    "name": "gulp-recipe-server",
+    "version": "0.0.1",
+    "private": true,
+    "description": "Server system for gulp-recipe",
+    "main": "./scripts/gulp-recipe-node.js",
+    "dependencies": {
+        "bugcore": "0.3.12"
+    },
+    "scripts": {
+        "test": "gulp test"
+    },
+    "devDependencies": {
+        "gulp": "^3.9.0",
+        "gulp-recipe": "^0.0.2"
+    },
+    "author": "Brian Neisler <me@brianneisler.com>",
+    "engines": {
+        "node": ">= 0.5.0"
+    }
+}
