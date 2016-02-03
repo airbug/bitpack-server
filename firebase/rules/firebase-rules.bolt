@@ -85,27 +85,78 @@ path /indexUsernameToUserId/$username  {
 
 
 //-------------------------------------------------------------------------------
+// PublishKey
+//-------------------------------------------------------------------------------
+
+path /publishKey/ {
+    read() = false;
+}
+
+path /publishKey/$publishKey is PublishKey {
+    write() = doesNotExist(this) && !isRecipeVersionPublished(this.recipeType, this.recipeScope, this.recipeName, this.recipeVersionNumber) && isCurrentUserRecipeCollaborator(this.recipeName);
+    validate() = isKey($publishKey);
+}
+
+path /publishKey/$publishKey/key {
+    validate() = this === $publishKey;
+}
+
+type PublishKey {
+    createdAt: Number,
+    key: Key,
+    recipeHash: RecipeHash,
+    recipeName: RecipeName,
+    recipeScope: RecipeScope,
+    recipeType: RecipeType,
+    recipeVersionNumber: RecipeVersionNumber,
+    updatedAt: Number,
+    usedAt: Number | Null
+}
+
+type Key extends String {
+    return isKey(this);
+}
+
+function isKey(value) {
+    return value.test(/^[0-9a-f]{80}$/);
+}
+
+
+//-------------------------------------------------------------------------------
 // Recipes
 //-------------------------------------------------------------------------------
 
-path /recipes/gulp/public/ {
-    read() = true;
+path /recipes/$recipeType/ {
+    validate() = $recipeType == 'gulp';
 }
 
-path /recipes/gulp/public/$recipeName is Recipe {
+path /recipes/$recipeType/$recipeScope/ {
+    read() = true;
+    validate() = $recipeScope == 'public';
+}
+
+path /recipes/$recipeType/$recipeScope/$recipeName is Recipe {
     write() = doesNotExist(this) || isCurrentUserRecipeOwner($recipeName) || isCurrentUserAdmin();
 }
 
-path /recipes/gulp/public/$recipeName/name {
+path /recipes/$recipeType/$recipeScope/$recipeName/context {
+    validate() = this == $recipeScope;
+}
+
+path /recipes/$recipeType/$recipeScope/$recipeName/name {
     validate() = this == $recipeName;
 }
 
-path /recipes/gulp/public/$recipeName/lastPublishedVersion {
-    write() = isCurrentUserRecipeCollaborator($recipeName);
+path /recipes/$recipeType/$recipeScope/$recipeName/type {
+    validate() = this == $recipeType;
+}
+
+path /recipes/$recipeType/$recipeScope/$recipeName/lastPublishedVersion {
+    write() = isCurrentUserRecipeCollaborator($recipeType, $recipeScope, $recipeName);
     validate() {
-        return isExistingRecipeVersionNumber(recipeName, this) || (
+        return isExistingRecipeVersionNumber($recipeType, $recipeScope, $recipeName, this) || (
             doesNotExist(this.parent) && this == ''
-        )
+        );
     }
 }
 
@@ -113,6 +164,8 @@ type Recipe {
     createdAt: Number,
     name: RecipeName,
     lastPublishedVersion: String,
+    scope: RecipeScope,
+    type: RecipeType,
     updatedAt: Number
 }
 
@@ -120,8 +173,24 @@ type RecipeName extends String {
     validate() = isRecipeName(this);
 }
 
+type RecipeScope extends String {
+    validate() = isRecipeScope(this);
+}
+
+type RecipeType extends String {
+    validate() = isRecipeType(this);
+}
+
 function isRecipeName(value) {
     return value.test(/^[a-z]+(?:[a-z0-9-][a-z0-9]+)*$/);
+}
+
+function isRecipeScope(value) {
+    return value == 'public';
+}
+
+function isRecipeType(value) {
+    return value == 'gulp';
 }
 
 
@@ -129,11 +198,11 @@ function isRecipeName(value) {
 // RecipeCollaborators
 //-------------------------------------------------------------------------------
 
-path /recipes/gulp/public/$recipeName/collaborators/$userId is RecipeCollaborator {
+path /recipes/$recipeType/$recipeScope/$recipeName/collaborators/$userId is RecipeCollaborator {
     validate() = isExistingUserId($userId);
 }
 
-path /recipes/gulp/public/$recipeName/collaborators/$userId/userId {
+path /recipes/$recipeType/$recipeScope/$recipeName/collaborators/$userId/userId {
     validate() = this == $userId;
 }
 
@@ -144,20 +213,20 @@ type RecipeCollaborator {
     userId: ExistingUserId
 }
 
-function isCurrentUserRecipeCollaborator(recipeName) {
-    return isUserRecipeCollaborator(auth.uid, recipeName);
+function isCurrentUserRecipeCollaborator(recipeType, recipeScope, recipeName) {
+    return isUserRecipeCollaborator(recipeType, recipeScope, recipeName, auth.uid);
 }
 
 function isCurrentUserRecipeOwner(recipeName) {
-    return isUserRecipeOwner(auth.uid, recipeName);
+    return isUserRecipeOwner(recipeType, recipeScope, recipeName, auth.uid);
 }
 
-function isUserRecipeCollaborator(userId, recipeName) {
-    return root.recipes.public[recipeName].collaborators[userId] !== null;
+function isUserRecipeCollaborator(recipeType, recipeScope, recipeName, userId) {
+    return root.recipes[recipeType][recipeScope][recipeName].collaborators[userId] !== null;
 }
 
-function isUserRecipeOwner(userId, recipeName) {
-    return root.recipes.public[recipeName].collaborators[userId].owner === true;
+function isUserRecipeOwner(recipeType, recipeScope, recipeName, userId) {
+    return root.recipes[recipeType][recipeScope][recipeName].collaborators[userId].owner === true;
 }
 
 
@@ -165,12 +234,12 @@ function isUserRecipeOwner(userId, recipeName) {
 // RecipeVersions
 //-------------------------------------------------------------------------------
 
-path /recipes/gulp/public/$recipeName/versions/$recipeVersionNumber is RecipeVersion {
+path /recipes/$recipeType/$recipeScope/$recipeName/versions/$recipeVersionNumber is RecipeVersion {
     //TODO BRN: Replace '-' with '.' in recipeVersionNumber
     validate() = isRecipeVersionNumber($recipeVersionNumber);
     write() {
         return (
-            doesNotExist(this) && isCurrentUserRecipeCollaborator(this)
+            doesNotExist(this) && isCurrentUserRecipeCollaborator($recipeType, $recipeScope, this)
         ) || (
             isCurrentUserRecipeOwner(this)
         ) || (
@@ -181,26 +250,40 @@ path /recipes/gulp/public/$recipeName/versions/$recipeVersionNumber is RecipeVer
 
 type RecipeVersion {
     createdAt: Number,
+    hash: RecipeHash,
     published: Boolean,
     recipeUrl: String,
     updatedAt: Number,
     versionNumber: RecipeVersionNumber
 }
 
-path /recipes/gulp/public/$recipeName/versions/$recipeVersionNumber/versionNumber {
+path /recipes/$recipeType/$recipeScope/$recipeName/versions/$recipeVersionNumber/versionNumber {
     validate() = this == $recipeVersionNumber;
+}
+
+type RecipeHash extends String {
+    validate() = isRecipeHash(this);
 }
 
 type RecipeVersionNumber extends String {
     validate() = isRecipeVersionNumber(this);
 }
 
-function isExistingRecipeVersionNumber(recipeName, value) {
-    return isRecipeVersionNumber(value) && root.recipes.public[recipeName].versions[value] != null;
+function isExistingRecipeVersionNumber(recipeType, recipeScope, recipeName, value) {
+    return isRecipeVersionNumber(value) && root.recipes[recipeType][recipeScope][recipeName].versions[value] != null;
+}
+
+function isRecipeHash(value) {
+    //TODO BRN:
+    return value.length > 32;
 }
 
 function isRecipeVersionNumber(value) {
     return value.test(/^[0-9]\.[0-9]\.[0-9]$/);
+}
+
+function isRecipeVersionPublished(recipeType, recipeScope, recipeName, recipeVersionNumber) {
+    return root.recipes[recipeType][recipeScope][recipeName].versions[recipeVersionNumber].published === true;
 }
 
 

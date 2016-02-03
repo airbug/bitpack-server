@@ -22,3 +22,8 @@ npm-debug.log
 
 #mac
 .DS_Store
+
+#development
+dist
+development.json
+.reciperc
