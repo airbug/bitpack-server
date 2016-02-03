@@ -10,9 +10,8 @@ import {
     Throwables,
     TypeUtil
 } from 'bugcore';
-import Config from 'config';
+import AWS from 'aws-sdk';
 import express from 'express';
-import fs from 'fs';
 import GulpRecipe from 'gulp-recipe';
 
 
@@ -134,6 +133,21 @@ const Api = Class.extend(Obj, {
 
     /**
      * @private
+     * @param {string} recipeName
+     * @param {string} versionNumber
+     * @return {Promise.<PublishKeyData>}
+     */
+    loadRecipeVersion(recipeName, versionNumber) {
+        return entities.RecipeVersion.get(recipeName, versionNumber)
+            .then((snapshot) => {
+                if (snapshot.exists()) {
+                    return new data.RecipeVersionData(snapshot.val());
+                }
+            });
+    },
+
+    /**
+     * @private
      * @param {PublishKeyData} publishKeyData
      */
     markPublishKeyUsed(publishKeyData) {
@@ -190,24 +204,13 @@ const Api = Class.extend(Obj, {
             }
             return this.loadPublishKey(key);
         }).then((publishKeyData) => {
-            return this.validatePublishKey(publishKeyData);
-        }).then((publishKeyData) => {
+            this.validatePublishKey(publishKeyData);
             return this.markPublishKeyUsed(publishKeyData);
         }).then((publishKeyData) => {
-            //TODO TEST
-            //const wstream = fs.createWriteStream(__dirname + '/out/test.tgz');
-            //recipePackageStream.pipe(wstream);
-
-            console.log('publishKeyData - recipeName:', publishKeyData.getRecipeName(), ' recipeHash:', publishKeyData.getRecipeHash());
-
 
             // TODO RecipeServer
-            // validate tarball hash
             // validate recipe name
             // validate recipe version
-            // validate recipeVersion has not already been published
-            // name of file is [recipeName]-[recipeVersion].tgz
-            // upload tarball to S3 at path [S3]/[recipeName]/[recipeVersion]/[recipeName]-[recipeVersion].tgz
 
             return core.RecipePackage.fromStream(recipePackageStream)
                 .then((recipePackage) => {
@@ -215,7 +218,62 @@ const Api = Class.extend(Obj, {
                 });
         }).then((results) => {
             const [publishKeyData, recipePackage] = results;
-            this.validateRecipePackage(recipePackage, publishKeyData);
+            this.validateRecipePackage(publishKeyData, recipePackage);
+            return this.loadRecipeVersion(publishKeyData.getRecipeName(), publishKeyData.getRecipeVersionNumber())
+                .then((recipeVersionData) => {
+                    return [publishKeyData, recipePackage, recipeVersionData];
+                });
+        }).then((results) => {
+            const [publishKeyData, recipePackage, recipeVersionData] = results;
+            this.validateRecipeVersion(recipeVersionData);
+            return this.uploadRecipePackage(publishKeyData, recipePackage)
+                .then((recipeUrl) => {
+                    return entities.RecipeVersion.update(publishKeyData.getRecipeName(), publishKeyData.getRecipeVersionNumber(), {
+                        published: true,
+                        recipeHash: recipePackage.getRecipeHash(),
+                        recipeUrl: recipeUrl
+                    });
+                });
+        });
+    },
+
+    /**
+     * @private
+     * @param {PublishKeyData} publishKeyData
+     * @param {RecipePackage} recipePackage
+     * @return {Promise<string>}
+     */
+    uploadRecipePackage(publishKeyData, recipePackage) {
+        return Promises.promise((resolve, reject) => {
+            const s3Stream = require('s3-upload-stream')(new AWS.S3());
+            const upload = s3Stream.upload({
+                ACL: 'public-read',
+                Bucket: 'gulp-recipe',
+                ContentType: 'application/x-compressed',
+                Key: 'recipes/' + publishKeyData.getRecipeType() + '/' + publishKeyData.getRecipeScope() + '/'
+                    + publishKeyData.getRecipeName() + '/' + publishKeyData.getRecipeVersionNumber() + '/' +
+                    publishKeyData.getRecipeType() + '-' + publishKeyData.getRecipeScope() + '-' +
+                    publishKeyData.getRecipeName() + '-' + publishKeyData.getRecipeVersionNumber() + '.tgz',
+                ServerSideEncryption: 'AES256'
+            });
+
+            upload.maxPartSize(20971520);
+            upload.concurrentParts(5);
+
+            upload.on('error', function (error) {
+                console.log(error);
+                reject(error);
+            });
+
+            upload.on('part', function (details) {
+                console.log(details);
+            });
+
+            upload.on('uploaded', function (details) {
+                resolve(decodeURIComponent(details.Location));
+            });
+
+            recipePackage.getRecipeStream().pipe(upload);
         });
     },
 
@@ -231,11 +289,27 @@ const Api = Class.extend(Obj, {
         if (publishKeyData.getUsedAt()) {
             throw Throwables.exception('BAD_AUTHORIZATION', {}, 'Publish key has already been used');
         }
-        return publishKeyData;
     },
 
-    validateRecipePackage(recipePackage, publishKeyData) {
+    /**
+     * @private
+     * @param {PublishKeyData} publishKeyData
+     * @param {RecipePackage} recipePackage
+     */
+    validateRecipePackage(publishKeyData, recipePackage) {
+        if (recipePackage.getRecipeHash() !== publishKeyData.getRecipeHash()) {
+            throw Throwables.exception('BAD_PACKAGE', {}, 'Package hash does not match publish data');
+        }
+    },
 
+    /**
+     * @private
+     * @param {RecipeVersionData} recipeVersionData
+     */
+    validateRecipeVersion(recipeVersionData) {
+        if (recipeVersionData.getPublished()) {
+            throw Throwables.exception('RECIPE_ALREADY_PUBLISHED', {}, 'A recipe has already been published for this version');
+        }
     }
 });
 

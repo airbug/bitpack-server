@@ -7,6 +7,8 @@ import {
     Obj,
     Proxy
 } from 'bugcore';
+import AWS from 'aws-sdk';
+import Config from 'config';
 import express from 'express';
 import GulpRecipe from 'gulp-recipe';
 import Api from './routes/Api';
@@ -46,6 +48,7 @@ const GulpRecipeServer = Class.extend(Obj, {
         return GulpRecipe.context({})
             .then(() => {
                 const adminToken = FirebaseTokenManager.getAdminToken();
+                AWS.config.update(Config.get('aws'));
                 return Firebase.authWithCustomToken(adminToken);
             })
             .then(() => {

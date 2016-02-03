@@ -252,6 +252,7 @@ type RecipeVersion {
     createdAt: Number,
     hash: RecipeHash,
     published: Boolean,
+    recipeHash: String,
     recipeUrl: String,
     updatedAt: Number,
     versionNumber: RecipeVersionNumber

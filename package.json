@@ -5,12 +5,14 @@
     "description": "Server system for gulp-recipe",
     "main": "./scripts/gulp-recipe-node.js",
     "dependencies": {
+        "aws-sdk": "2.2.33",
         "bugcore": "0.3.24",
         "config": "1.19.0",
         "express": "4.13.4",
         "firebase": "2.4.0",
         "firebase-token-generator": "2.0.0",
-        "fireproof": "3.1.0"
+        "fireproof": "3.1.0",
+        "s3-upload-stream": "1.0.7"
     },
     "scripts": {
         "start": "node ./dist/scripts/gulp-recipe-server-start.js",
