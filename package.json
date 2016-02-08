@@ -6,7 +6,7 @@
     "main": "./scripts/gulp-recipe-node.js",
     "dependencies": {
         "aws-sdk": "2.2.33",
-        "bugcore": "0.3.24",
+        "bugcore": "0.3.25",
         "config": "1.19.0",
         "express": "4.13.4",
         "firebase": "2.4.0",

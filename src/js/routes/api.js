@@ -209,8 +209,9 @@ const Api = Class.extend(Obj, {
         }).then((publishKeyData) => {
 
             // TODO RecipeServer
-            // validate recipe name
-            // validate recipe version
+            // unpack stream to...
+            // - validate recipe name
+            // - validate recipe version
 
             return core.RecipePackage.fromStream(recipePackageStream)
                 .then((recipePackage) => {
@@ -228,11 +229,16 @@ const Api = Class.extend(Obj, {
             this.validateRecipeVersion(recipeVersionData);
             return this.uploadRecipePackage(publishKeyData, recipePackage)
                 .then((recipeUrl) => {
-                    return entities.RecipeVersion.update(publishKeyData.getRecipeName(), publishKeyData.getRecipeVersionNumber(), {
-                        published: true,
-                        recipeHash: recipePackage.getRecipeHash(),
-                        recipeUrl: recipeUrl
-                    });
+                    return Promise.all([
+                        entities.RecipeVersion.update(publishKeyData.getRecipeName(), publishKeyData.getRecipeVersionNumber(), {
+                            published: true,
+                            recipeHash: recipePackage.getRecipeHash(),
+                            recipeUrl: recipeUrl
+                        }),
+                        entities.Recipe.update(publishKeyData.getRecipeName(), {
+                            lastPublishedVersion: publishKeyData.getRecipeVersionNumber()
+                        })
+                    ]);
                 });
         });
     },

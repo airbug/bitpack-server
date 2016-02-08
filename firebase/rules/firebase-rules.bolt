@@ -34,6 +34,11 @@ function isEmailId(value) {
     return isId(value);
 }
 
+function isEmailPath(value) {
+    //TODO BRN:
+    return true;
+}
+
 function isEmailString(value) {
     return value.isString() && value.length <= 254 && value.test(/^[-!#$%&'*+\/0-9=?A-Z^_a-z{|}~](\.?[-!#$%&'*+\/0-9=?A-Z^_a-z`{|}~])*@[a-zA-Z0-9](-?\.?[a-zA-Z0-9])*(\.[a-zA-Z](-?[a-zA-Z0-9])*)+$/);
 }
@@ -44,10 +49,37 @@ function isExistingEmailId(value) {
 
 
 //-------------------------------------------------------------------------------
-// IndexUserIdToEmailIds
+// Indexes
 //-------------------------------------------------------------------------------
 
-path /indexUserIdToEmailIds/$userId {
+
+// EmailToUserId
+//-------------------------------------------------------------------------------
+
+path /indexes/emailToUserId/$emailPath  {
+    read() = isCurrentUserId(this) || isCurrentUserAdmin() || this == null;
+    write() {
+        return (
+            doesNotExist(this) || isCurrentUserId(prior(this))
+        ) && (
+            isCurrentUserId(this) || willNotExist(this)
+        ) || (
+            isCurrentUserAdmin()
+        );
+    }
+    validate() = isEmailPath($emailPath) && isExistingUserId(this);
+}
+
+function emailDoesNotExist(email) {
+    return root.indexes.emailToUserId[escapePathPart(prior(email))] == null;
+}
+
+
+
+// UserIdToEmailIds
+//-------------------------------------------------------------------------------
+
+path /indexes/userIdToEmailIds/$userId {
   read() = isCurrentUserId($userId) || isCurrentUserAdmin();
   write() = isCurrentUserId($userId) || isCurrentUserAdmin();
   validate() {
@@ -55,22 +87,21 @@ path /indexUserIdToEmailIds/$userId {
   }
 }
 
-path /indexUserIdToEmailIds/$userId/$emailId is ExistingEmailId {
+path /indexes/userIdToEmailIds/$userId/$emailId is ExistingEmailId {
   validate() {
     return this == $emailId;
   }
 }
 
 
-//-------------------------------------------------------------------------------
-// IndexUsernameToUserId
+// UsernameToUserId
 //-------------------------------------------------------------------------------
 
-path /indexUsernameToUserId {
+path /indexes/usernameToUserId {
     read() = true;
 }
 
-path /indexUsernameToUserId/$username  {
+path /indexes/usernameToUserId/$username  {
     write() {
         return (
             doesNotExist(this) || isCurrentUserId(prior(this))
@@ -81,6 +112,10 @@ path /indexUsernameToUserId/$username  {
         );
     }
     validate() = isUsername($username) && isExistingUserId(this);
+}
+
+function usernameDoesNotExist(username) {
+    return root.indexes.usernameToUserId[prior(username)] == null;
 }
 
 
@@ -235,8 +270,7 @@ function isUserRecipeOwner(recipeType, recipeScope, recipeName, userId) {
 //-------------------------------------------------------------------------------
 
 path /recipes/$recipeType/$recipeScope/$recipeName/versions/$recipeVersionNumber is RecipeVersion {
-    //TODO BRN: Replace '-' with '.' in recipeVersionNumber
-    validate() = isRecipeVersionNumber($recipeVersionNumber);
+    validate() = isRecipeVersionNumber(unescapePathPart($recipeVersionNumber));
     write() {
         return (
             doesNotExist(this) && isCurrentUserRecipeCollaborator($recipeType, $recipeScope, this)
@@ -252,10 +286,10 @@ type RecipeVersion {
     createdAt: Number,
     hash: RecipeHash,
     published: Boolean,
-    recipeHash: String,
-    recipeUrl: String,
     updatedAt: Number,
-    versionNumber: RecipeVersionNumber
+    url: String,
+    versionNumber: RecipeVersionNumber,
+    versionParts: RecipeVersionParts
 }
 
 path /recipes/$recipeType/$recipeScope/$recipeName/versions/$recipeVersionNumber/versionNumber {
@@ -270,6 +304,22 @@ type RecipeVersionNumber extends String {
     validate() = isRecipeVersionNumber(this);
 }
 
+type RecipeVersionParts {
+    major: NonNegativeInteger,
+    minor: NonNegativeInteger,
+    patch: NonNegativeInteger,
+    preRelease: PreReleaseString,
+    metadata: MetadataString
+}
+
+type MetadataString extends String {
+    validate() = value.test(/^([0-9A-Za-z-][0-9A-Za-z-]*)(\.([0-9A-Za-z-][0-9A-Za-z-]*))*$/);
+}
+
+type PreReleaseString extends String {
+    validate() = value.test(/^([0-9]|([1-9A-Za-z-][0-9A-Za-z-]*))(\.([0-9]|([1-9A-Za-z-][0-9A-Za-z-]*)))*$/);
+}
+
 function isExistingRecipeVersionNumber(recipeType, recipeScope, recipeName, value) {
     return isRecipeVersionNumber(value) && root.recipes[recipeType][recipeScope][recipeName].versions[value] != null;
 }
@@ -280,7 +330,7 @@ function isRecipeHash(value) {
 }
 
 function isRecipeVersionNumber(value) {
-    return value.test(/^[0-9]\.[0-9]\.[0-9]$/);
+    return value.test(/^[0-9]\.[0-9]\.[0-9](-([0-9]|([1-9A-Za-z-][0-9A-Za-z-]*))(\.([0-9]|([1-9A-Za-z-][0-9A-Za-z-]*)))*)?(\+([0-9A-Za-z-][0-9A-Za-z-]*)(\.([0-9A-Za-z-][0-9A-Za-z-]*))*)?$/);
 }
 
 function isRecipeVersionPublished(recipeType, recipeScope, recipeName, recipeVersionNumber) {
@@ -324,7 +374,16 @@ path /users/$userId is User | EmptyPush {
     write() = isCurrentUserId($userId) || isCurrentUserAdmin();
 }
 
+path /users/$userId/email  {
+    validate() = emailDoesNotExist(this);
+}
+
+path /users/$userId/username  {
+    validate() = usernameDoesNotExist(this);
+}
+
 type User extends Entity  {
+    email: EmailField,
     username: Username
 }
 
@@ -361,7 +420,7 @@ function isExistingUserId(value) {
 }
 
 function isExistingUsername(value) {
-    return isUsername(value) && root.indexUsernameToUserId[value] != null;
+    return isUsername(value) && root.indexes.usernameToUserId[value] != null;
 }
 
 function isUserId(value) {
@@ -419,12 +478,46 @@ type Id extends String {
     validate() = isId(this);
 }
 
+type Integer extends Number {
+    validate() = isInteger(this);
+}
+
+type NonNegativeInteger extends Integer {
+    validate() = isNonNegative(this);
+}
+
+type NonNegativeNumber extends Number {
+    validate() = isNonNegative(this);
+}
+
 function doesExist(value) {
     return prior(value) != null;
 }
 
 function doesNotExist(value) {
     return prior(value) == null;
+}
+
+function escapePathPart(pathPart) {
+    return pathPart
+        .replace('.', '(P)')
+        .replace('@', '(A)')
+        .replace('!', '(B)')
+        .replace('#', '(H)')
+        .replace('$', '(D)')
+        .replace('%', '(PR)')
+        .replace('&', '(AN)')
+        .replace('\'', '(SQ)')
+        .replace('*', '(ST)')
+        .replace('+', '(PL)')
+        .replace('/', '(FS)')
+        .replace('=', '(E)')
+        .replace('?', '(Q)')
+        .replace('^', '(C)')
+        .replace('`', '(G)') //grave accent
+        .replace('{', '(OC)')
+        .replace('|', '(PI)')
+        .replace('}', '(CC)');
 }
 
 function isEmptyPush(value) {
@@ -435,12 +528,42 @@ function isId(value) {
     return value.test(/^-[a-zA-Z0-9_-]+$/);
 }
 
+function isInteger(value) {
+    return value % 1 == 0;
+}
+
+function isNonNegative(value) {
+    return value >= 0;
+}
+
 function isNumberString(value) {
     return value.test(/^[0-9]+$/);
 }
 
 function doesNotExistAndWillNotExist(value) {
     return (doesNotExist(value) && willNotExist(value));
+}
+
+function unescapePathPart(pathPart) {
+    return pathPart
+        .replace('(P)', '.')
+        .replace('(A)', '@')
+        .replace('(B)', '!')
+        .replace('(H)', '#')
+        .replace('(D)', '$')
+        .replace('(PR)', '%')
+        .replace('(AN)', '&')
+        .replace('(SQ)', '\'')
+        .replace('(ST)', '*')
+        .replace('(PL)', '+')
+        .replace('(FS)' ,'/')
+        .replace('(E)', '=')
+        .replace('(Q)', '?')
+        .replace('(C)', '^')
+        .replace('(G)', '`') //grave accent
+        .replace('(OC)', '{')
+        .replace('(PI)', '|')
+        .replace('(CC)', '}')
 }
 
 function willExist(value) {
