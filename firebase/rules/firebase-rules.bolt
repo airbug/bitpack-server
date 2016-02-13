@@ -1,54 +1,4 @@
 //-------------------------------------------------------------------------------
-// Emails
-//-------------------------------------------------------------------------------
-
-path /emails/$emailId is Email {
-    read() = doesCurrentUserOwnObject(this) || doesNotExist(this) || isCurrentUserAdmin();
-    write() = isOwnedByOrDoesNotExistAndWillBeOwnedByCurrentUser(this) || isCurrentUserAdmin();
-    validate() = isEmailId($emailId);
-}
-
-path /emails/$emailId/id {
-    validate() = this == $emailId && this == convertEmailToEmailId(this.parent().email);
-}
-
-type Email extends Entity {
-    email: EmailField,
-    primary: Boolean,
-    userId: UserId
-}
-
-type EmailField extends String {
-  validate() = isEmailString(this);
-}
-
-type EmailId extends String {
-    validate() = isEmailId(this);
-}
-
-type ExistingEmailId extends String {
-    validate() = isExistingEmailId(this);
-}
-
-function isEmailId(value) {
-    return isId(value);
-}
-
-function isEmailPath(value) {
-    //TODO BRN:
-    return true;
-}
-
-function isEmailString(value) {
-    return value.isString() && value.length <= 254 && value.test(/^[-!#$%&'*+\/0-9=?A-Z^_a-z{|}~](\.?[-!#$%&'*+\/0-9=?A-Z^_a-z`{|}~])*@[a-zA-Z0-9](-?\.?[a-zA-Z0-9])*(\.[a-zA-Z](-?[a-zA-Z0-9])*)+$/);
-}
-
-function isExistingEmailId(value) {
-    return isEmailId(value) && root.emails[value] != null;
-}
-
-
-//-------------------------------------------------------------------------------
 // Indexes
 //-------------------------------------------------------------------------------
 
@@ -56,41 +6,30 @@ function isExistingEmailId(value) {
 // EmailToUserId
 //-------------------------------------------------------------------------------
 
-path /indexes/emailToUserId/$emailPath  {
-    read() = isCurrentUserId(this) || isCurrentUserAdmin() || this == null;
+path /indexes/emailToUserId/{email}  {
+    read() {
+        isCurrentUserId(this) || isCurrentUserAdmin() || this == null
+    }
     write() {
-        return (
+        (
             doesNotExist(this) || isCurrentUserId(prior(this))
         ) && (
             isCurrentUserId(this) || willNotExist(this)
         ) || (
             isCurrentUserAdmin()
-        );
+        )
     }
-    validate() = isEmailPath($emailPath) && isExistingUserId(this);
+    validate() {
+        isEmailString(unescapePathPart(email)) && isExistingUserId(this) && willBeUsersEmail(this.parent().parent().parent(), this, unescapePathPart(email))
+    }
 }
 
 function emailDoesNotExist(email) {
     return root.indexes.emailToUserId[escapePathPart(prior(email))] == null;
 }
 
-
-
-// UserIdToEmailIds
-//-------------------------------------------------------------------------------
-
-path /indexes/userIdToEmailIds/$userId {
-  read() = isCurrentUserId($userId) || isCurrentUserAdmin();
-  write() = isCurrentUserId($userId) || isCurrentUserAdmin();
-  validate() {
-    return isExistingUserId($userId);
-  }
-}
-
-path /indexes/userIdToEmailIds/$userId/$emailId is ExistingEmailId {
-  validate() {
-    return this == $emailId;
-  }
+function willBeIndexedEmailForUserId(newRoot, email, userId) {
+    return newRoot.indexes.emailToUserId[escapePathPart(email)] == userId;
 }
 
 
@@ -98,24 +37,30 @@ path /indexes/userIdToEmailIds/$userId/$emailId is ExistingEmailId {
 //-------------------------------------------------------------------------------
 
 path /indexes/usernameToUserId {
-    read() = true;
+    read() { true }
 }
 
-path /indexes/usernameToUserId/$username  {
+path /indexes/usernameToUserId/{username}  {
     write() {
-        return (
+        (
             doesNotExist(this) || isCurrentUserId(prior(this))
         ) && (
             isCurrentUserId(this) || willNotExist(this)
         ) || (
             isCurrentUserAdmin()
-        );
+        )
     }
-    validate() = isUsername($username) && isExistingUserId(this);
+    validate() {
+        isUsername(username) && isExistingUserId(this) && willBeUsersUsername(this.parent().parent().parent(), this, username)
+    }
 }
 
 function usernameDoesNotExist(username) {
     return root.indexes.usernameToUserId[prior(username)] == null;
+}
+
+function willBeIndexedUsernameForUserId(newRoot, username, userId) {
+    return newRoot.indexes.usernameToUserId[username] == userId;
 }
 
 
@@ -124,32 +69,34 @@ function usernameDoesNotExist(username) {
 //-------------------------------------------------------------------------------
 
 path /publishKey/ {
-    read() = false;
+    read() { false }
 }
 
-path /publishKey/$publishKey is PublishKey {
-    write() = doesNotExist(this) && !isRecipeVersionPublished(this.recipeType, this.recipeScope, this.recipeName, this.recipeVersionNumber) && isCurrentUserRecipeCollaborator(this.recipeName);
-    validate() = isKey($publishKey);
+path /publishKey/{publishKey} is PublishKey {
+    write() {
+        doesNotExist(this) &&
+        !isRecipeVersionPublished(this.recipeType, this.recipeScope, this.recipeName, this.recipeVersionNumber) &&
+        isCurrentUserRecipeCollaborator(this.recipeName)
+    }
+    validate() { isKey(publishKey) }
 }
 
-path /publishKey/$publishKey/key {
-    validate() = this === $publishKey;
+path /publishKey/{publishKey}/key {
+    validate() { this == publishKey }
 }
 
-type PublishKey {
-    createdAt: Number,
+type PublishKey extends TimeStamped {
     key: Key,
     recipeHash: RecipeHash,
     recipeName: RecipeName,
     recipeScope: RecipeScope,
     recipeType: RecipeType,
     recipeVersionNumber: RecipeVersionNumber,
-    updatedAt: Number,
     usedAt: Number | Null
 }
 
 type Key extends String {
-    return isKey(this);
+    validate() { isKey(this) }
 }
 
 function isKey(value) {
@@ -161,59 +108,51 @@ function isKey(value) {
 // Recipes
 //-------------------------------------------------------------------------------
 
-path /recipes/$recipeType/ {
-    validate() = $recipeType == 'gulp';
+path /recipes/{recipeType}/ {
+    validate() { recipeType == 'gulp' }
 }
 
-path /recipes/$recipeType/$recipeScope/ {
-    read() = true;
-    validate() = $recipeScope == 'public';
+path /recipes/{recipeType}/{recipeScope}/ {
+    read() { true }
+    validate() { recipeScope == 'public' }
 }
 
-path /recipes/$recipeType/$recipeScope/$recipeName is Recipe {
-    write() = doesNotExist(this) || isCurrentUserRecipeOwner($recipeName) || isCurrentUserAdmin();
-}
-
-path /recipes/$recipeType/$recipeScope/$recipeName/context {
-    validate() = this == $recipeScope;
-}
-
-path /recipes/$recipeType/$recipeScope/$recipeName/name {
-    validate() = this == $recipeName;
-}
-
-path /recipes/$recipeType/$recipeScope/$recipeName/type {
-    validate() = this == $recipeType;
-}
-
-path /recipes/$recipeType/$recipeScope/$recipeName/lastPublishedVersion {
-    write() = isCurrentUserRecipeCollaborator($recipeType, $recipeScope, $recipeName);
-    validate() {
-        return isExistingRecipeVersionNumber($recipeType, $recipeScope, $recipeName, this) || (
-            doesNotExist(this.parent) && this == ''
-        );
+path /recipes/{recipeType}/{recipeScope}/{recipeName}/info is Recipe {
+    write() {
+        doesNotExist(this) ||
+        isCurrentUserRecipeOwner(recipeName) ||
+        isCurrentUserAdmin()
     }
 }
 
-type Recipe {
-    createdAt: Number,
+path /recipes/{recipeType}/{recipeScope}/{recipeName}/info/scope {
+    validate() { this == recipeScope }
+}
+
+path /recipes/{recipeType}/{recipeScope}/{recipeName}/info/name {
+    validate() { this == recipeName }
+}
+
+path /recipes/{recipeType}/{recipeScope}/{recipeName}/info/type {
+    validate() { this == recipeType }
+}
+
+type Recipe extends TimeStamped {
     name: RecipeName,
-    lastPublishedVersion: String,
     scope: RecipeScope,
-    type: RecipeType,
-    updatedAt: Number
+    type: RecipeType
 }
 
 type RecipeName extends String {
-    validate() = isRecipeName(this);
+    validate() { isRecipeName(this) }
 }
 
 type RecipeScope extends String {
-    validate() = isRecipeScope(this);
+    validate() { isRecipeScope(this) }
 }
 
 type RecipeType extends String {
-    validate() = isRecipeType(this);
+    validate() { isRecipeType(this) }
 }
 
 function isRecipeName(value) {
@@ -233,18 +172,27 @@ function isRecipeType(value) {
 // RecipeCollaborators
 //-------------------------------------------------------------------------------
 
-path /recipes/$recipeType/$recipeScope/$recipeName/collaborators/$userId is RecipeCollaborator {
-    validate() = isExistingUserId($userId);
+path /recipes/{recipeType}/{recipeScope}/{recipeName}/collaborators {
+    write() {
+        doesNotExist(this) ||
+        isCurrentUserRecipeOwner(recipeName) ||
+        isCurrentUserAdmin()
+    }
 }
 
-path /recipes/$recipeType/$recipeScope/$recipeName/collaborators/$userId/userId {
-    validate() = this == $userId;
+path /recipes/{recipeType}/{recipeScope}/{recipeName}/collaborators/{userId} is RecipeCollaborator {
+    validate() { isExistingUserId(userId) }
+    write() {
+        isCurrentUserId(userId) && willNotExist(this)
+    }
 }
 
-type RecipeCollaborator {
-    createdAt: Number,
+path /recipes/{recipeType}/{recipeScope}/{recipeName}/collaborators/{userId}/userId {
+    validate() { this == userId }
+}
+
+type RecipeCollaborator extends TimeStamped {
     owner: Boolean,
-    updatedAt: Number,
     userId: ExistingUserId
 }
 
@@ -266,62 +214,123 @@ function isUserRecipeOwner(recipeType, recipeScope, recipeName, userId) {
 
 
 //-------------------------------------------------------------------------------
+// RecipeVersionsInfo
+//-------------------------------------------------------------------------------
+
+path /recipes/{recipeType}/{recipeScope}/{recipeName}/versionsInfo is RecipeVersionsInfo {
+    write() { isCurrentUserRecipeCollaborator(recipeType, recipeScope, recipeName) }
+}
+
+path /recipes/{recipeType}/{recipeScope}/{recipeName}/versionsInfo/last {
+    validate() {
+        isExistingRecipeVersionNumber(recipeType, recipeScope, recipeName, this) || (
+            doesNotExist(this.parent()) && this == ''
+        )
+    }
+}
+
+path /recipes/{recipeType}/{recipeScope}/{recipeName}/versionsInfo/all/{versionNumber} is RecipeVersionNumber {
+    validate() {
+        this == unescapePathPart(versionNumber) &&
+        willRecipeVersionExist(
+            this.parent().parent().parent().parent().parent().parent().parent(),
+            recipeType,
+            recipeScope,
+            recipeName,
+            unescapePathPart(versionNumber))
+    }
+}
+
+type RecipeVersionsInfo extends TimeStamped {
+    last: RecipeVersionNumber
+}
+
+function willRecipeVersionInfoExist(newRoot, recipeType, recipeScope, recipeName, recipeVersionNumber) {
+    return newRoot.recipes[recipeType][recipeScope][recipeName].versionsInfo.all[escapePathPart(recipeVersionNumber)] != null;
+}
+
+
+//-------------------------------------------------------------------------------
 // RecipeVersions
 //-------------------------------------------------------------------------------
 
-path /recipes/$recipeType/$recipeScope/$recipeName/versions/$recipeVersionNumber is RecipeVersion {
-    validate() = isRecipeVersionNumber(unescapePathPart($recipeVersionNumber));
+path /recipes/{recipeType}/{recipeScope}/{recipeName}/versions/{versionNumber} is RecipeVersion {
+    validate() {
+        isRecipeVersionNumber(unescapePathPart(versionNumber)) &&
+        willRecipeVersionInfoExist(
+            this.parent().parent().parent().parent().parent().parent(),
+            recipeType,
+            recipeScope,
+            recipeName,
+            unescapePathPart(versionNumber))
+    }
     write() {
-        return (
-            doesNotExist(this) && isCurrentUserRecipeCollaborator($recipeType, $recipeScope, this)
+        (
+            doesNotExist(this) && isCurrentUserRecipeCollaborator(recipeType, recipeScope, this)
         ) || (
             isCurrentUserRecipeOwner(this)
         ) || (
             isCurrentUserAdmin()
-        );
+        )
     }
 }
 
-type RecipeVersion {
-    createdAt: Number,
+type RecipeVersion extends TimeStamped {
     hash: RecipeHash,
     published: Boolean,
-    updatedAt: Number,
+    semanticVersion: SemanticVersion,
     url: String,
-    versionNumber: RecipeVersionNumber,
-    versionParts: RecipeVersionParts
+    versionNumber: RecipeVersionNumber
 }
 
-path /recipes/$recipeType/$recipeScope/$recipeName/versions/$recipeVersionNumber/versionNumber {
-    validate() = this == $recipeVersionNumber;
+path /recipes/{recipeType}/{recipeScope}/{recipeName}/versions/{versionNumber}/versionNumber {
+    validate() { this == unescapePathPart(versionNumber) }
 }
 
 type RecipeHash extends String {
-    validate() = isRecipeHash(this);
+    validate() { isRecipeHash(this) }
 }
 
 type RecipeVersionNumber extends String {
-    validate() = isRecipeVersionNumber(this);
+    validate() { isRecipeVersionNumber(this) }
 }
 
-type RecipeVersionParts {
+type SemanticVersion {
+    build: Array<BuildString>,
     major: NonNegativeInteger,
     minor: NonNegativeInteger,
     patch: NonNegativeInteger,
-    preRelease: PreReleaseString,
-    metadata: MetadataString
+    prerelease: Array<PrereleaseString>,
+    raw: SemanticVersionString,
+    version: VersionString
 }
 
-type MetadataString extends String {
-    validate() = value.test(/^([0-9A-Za-z-][0-9A-Za-z-]*)(\.([0-9A-Za-z-][0-9A-Za-z-]*))*$/);
+type BuildString extends String {
+    validate() { isBuildString(this) }
 }
 
-type PreReleaseString extends String {
-    validate() = value.test(/^([0-9]|([1-9A-Za-z-][0-9A-Za-z-]*))(\.([0-9]|([1-9A-Za-z-][0-9A-Za-z-]*)))*$/);
+type PrereleaseString extends String {
+    validate() { isPrereleaseString(this) }
+}
+
+type SemanticVersionString extends String {
+    validate() { isSemanticVersionString(this) }
+}
+
+type VersionString extends String {
+    validate() { isVersionString(this) }
+}
+
+function isBuildString(value) {
+    return value.test(/^([0-9A-Za-z-][0-9A-Za-z-]*)$/);
 }
 
 function isExistingRecipeVersionNumber(recipeType, recipeScope, recipeName, value) {
-    return isRecipeVersionNumber(value) && root.recipes[recipeType][recipeScope][recipeName].versions[value] != null;
+    return isRecipeVersionNumber(value) && root.recipes[recipeType][recipeScope][recipeName].versions[escapePathPart(value)] != null;
+}
+
+function isPrereleaseString(value) {
+    return value.test(/^([0-9]|([1-9A-Za-z-][0-9A-Za-z-]*))$/);
 }
 
 function isRecipeHash(value) {
@@ -330,11 +339,23 @@ function isRecipeHash(value) {
 }
 
 function isRecipeVersionNumber(value) {
-    return value.test(/^[0-9]\.[0-9]\.[0-9](-([0-9]|([1-9A-Za-z-][0-9A-Za-z-]*))(\.([0-9]|([1-9A-Za-z-][0-9A-Za-z-]*)))*)?(\+([0-9A-Za-z-][0-9A-Za-z-]*)(\.([0-9A-Za-z-][0-9A-Za-z-]*))*)?$/);
+    return isVersionString(value);
 }
 
 function isRecipeVersionPublished(recipeType, recipeScope, recipeName, recipeVersionNumber) {
     return root.recipes[recipeType][recipeScope][recipeName].versions[recipeVersionNumber].published === true;
+}
+
+function isSemanticVersionString(value) {
+    return value.test(/^[0-9]\.[0-9]\.[0-9](-([0-9]|([1-9A-Za-z-][0-9A-Za-z-]*))(\.([0-9]|([1-9A-Za-z-][0-9A-Za-z-]*)))*)?(\+([0-9A-Za-z-][0-9A-Za-z-]*)(\.([0-9A-Za-z-][0-9A-Za-z-]*))*)?$/);
+}
+
+function isVersionString(value) {
+    return value.test(/^[0-9]\.[0-9]\.[0-9](-([0-9]|([1-9A-Za-z-][0-9A-Za-z-]*))(\.([0-9]|([1-9A-Za-z-][0-9A-Za-z-]*)))*)?$/);
+}
+
+function willRecipeVersionExist(newRoot, recipeType, recipeScope, recipeName, recipeVersionNumber) {
+    return newRoot.recipes[recipeType][recipeScope][recipeName].versions[escapePathPart(recipeVersionNumber)] != null;
 }
 
 
@@ -342,10 +363,10 @@ function isRecipeVersionPublished(recipeType, recipeScope, recipeName, recipeVer
 // Roles
 //-------------------------------------------------------------------------------
 
-path /roles/$userId is Role {
-    read() = isCurrentUserId($userId) || isCurrentUserAdmin();
-    write() = isCurrentUserAdmin();
-    validate() = isExistingUserId($userId);
+path /roles/{userId} is Role {
+    read() { isCurrentUserId(userId) || isCurrentUserAdmin() }
+    write() { isCurrentUserAdmin() }
+    validate() { isExistingUserId(userId) }
 }
 
 type Role extends Entity {
@@ -354,7 +375,7 @@ type Role extends Entity {
 }
 
 type RoleString extends String {
-    validate() = this == 'admin';
+    validate() { this == 'admin' }
 }
 
 function isCurrentUserAdmin() {
@@ -366,41 +387,50 @@ function isCurrentUserAdmin() {
 // Users
 //-------------------------------------------------------------------------------
 
-path /users {
-    read() = true;
+path /users/{userId} is User | EmptyPush {
+    read() { isCurrentUserId(userId) || isCurrentUserAdmin() }
+    write() { isCurrentUserId(userId) || isCurrentUserAdmin() }
 }
 
-path /users/$userId is User | EmptyPush {
-    write() = isCurrentUserId($userId) || isCurrentUserAdmin();
+path /users/{userId}/email  {
+    validate() {
+        isEmptyString(this) || (
+            isEmailString(this) && emailDoesNotExist(this) && willBeIndexedEmailForUserId(this.parent().parent().parent(), this, userId)
+        )
+    }
 }
 
-path /users/$userId/email  {
-    validate() = emailDoesNotExist(this);
-}
-
-path /users/$userId/username  {
-    validate() = usernameDoesNotExist(this);
+path /users/{userId}/username {
+    validate() {
+        isEmptyString(this) || (
+            isUsername(this) && usernameDoesNotExist(this) && willBeIndexedUsernameForUserId(this.parent().parent().parent(), this, userId)
+        );
+    }
 }
 
 type User extends Entity  {
-    email: EmailField,
-    username: Username
+    email: String,
+    username: String
+}
+
+type EmailString extends String {
+    validate() { isEmailString(this) }
 }
 
 type UserId extends Id {
-    validate() = isUserId(this);
+    validate() { isUserId(this) }
 }
 
 type ExistingUserId extends String {
-    validate() = isExistingUserId(this);
+    validate() { isExistingUserId(this) }
 }
 
 type Username extends String {
-    validate() = isUsername(this);
+    validate() { isUsername(this) }
 }
 
 type ExistingUsername extends String {
-    validate() = isExistingUsername(this);
+    validate() { isExistingUsername(this) }
 }
 
 function isCurrentUserId(userId) {
@@ -413,6 +443,10 @@ function hasUserId(object) {
 
 function isAuthenticated() {
     return auth != null;
+}
+
+function isEmailString(value) {
+    return value.isString() && value.length <= 254 && value.test(/^[-!#$%&'*+\/0-9=?A-Z^_a-z{|}~](\.?[-!#$%&'*+\/0-9=?A-Z^_a-z`{|}~])*@[a-zA-Z0-9](-?\.?[a-zA-Z0-9])*(\.[a-zA-Z](-?[a-zA-Z0-9])*)+$/);
 }
 
 function isExistingUserId(value) {
@@ -443,6 +477,14 @@ function isOwnedByOrDoesNotExistAndWillBeOwnedByCurrentUser(object) {
     );
 }
 
+function willBeUsersEmail(newRoot, userId, email) {
+  return newRoot.users[userId].email == email;
+}
+
+function willBeUsersUsername(newRoot, userId, username) {
+  return newRoot.users[userId].username == username;
+}
+
 function willCurrentUserOwnObject(object) {
     return isCurrentUserId(object.userId);
 }
@@ -457,37 +499,40 @@ type Array<T> {
 }
 
 type ArrayIndex<T> extends T {
-    validate() = isNumberString($index);
+    validate() { isNumberString($index) }
 }
 
-type Entity {
+type Entity extends TimeStamped {
+    id: Id
+}
+
+type TimeStamped {
     createdAt: Number,
-    id: Id,
     updatedAt: Number
 }
 
 type EmptyPush {
-    validate() = isEmptyPush(this);
+    validate() { isEmptyPush(this) }
 }
 
 type EmptyString extends String {
-    validate() = this == "";
+    validate() { isEmptyString(this) }
 }
 
 type Id extends String {
-    validate() = isId(this);
+    validate() { isId(this) }
 }
 
 type Integer extends Number {
-    validate() = isInteger(this);
+    validate() { isInteger(this) }
 }
 
 type NonNegativeInteger extends Integer {
-    validate() = isNonNegative(this);
+    validate() { isNonNegative(this) }
 }
 
 type NonNegativeNumber extends Number {
-    validate() = isNonNegative(this);
+    validate() { isNonNegative(this) }
 }
 
 function doesExist(value) {
@@ -522,6 +567,10 @@ function escapePathPart(pathPart) {
 
 function isEmptyPush(value) {
     return doesNotExistAndWillNotExist(value);
+}
+
+function isEmptyString(value) {
+    return value == "";
 }
 
 function isId(value) {

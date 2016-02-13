@@ -1,0 +1,195 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Resources" : {
+        "recipeDNSRecords": {
+            "Type": "AWS::Route53::RecordSetGroup",
+            "Properties": {
+                "HostedZoneName": "gulprecipe.com.",
+                "Comment": "DNS records for gulp-recipe.",
+                "RecordSets": [
+                    {
+                        "Name": "gulprecipe.com.",
+                        "Type": "A",
+                        "TTL": "900",
+                        "ResourceRecords": [
+                            "192.168.0.1",
+                            "192.168.0.2"
+                        ]
+                    },
+                    {
+                        "Name": "edge.gulprecipe.com.",
+                        "Type": "CNAME",
+                        "TTL": "900",
+                        "ResourceRecords": [
+                            {
+                                "Fn::GetAtt": [
+                                    "recipeCloudfrontDistribution",
+                                    "DomainName"
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        },
+        "recipeBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "AccessControl": "PublicRead",
+                "LoggingConfiguration": {
+                    "DestinationBucketName": {
+                        "Ref": "logsBucket"
+                    },
+                    "LogFilePrefix": "logs/bitrecipe/S3"
+                }
+            },
+            "DeletionPolicy": "Retain"
+        },
+        "logsBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "AccessControl": "LogDeliveryWrite"
+            },
+            "DeletionPolicy": "Retain"
+        },
+        "rootRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [
+                                    "ec2.amazonaws.com"
+                                ]
+                            },
+                            "Action": [
+                                "sts:AssumeRole"
+                            ]
+                        }
+                    ]
+                },
+                "Path": "/",
+                "Policies": [
+                    {
+                        "PolicyName": "root",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": "*",
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "recipeCloudfrontDistribution": {
+            "Type": "AWS::CloudFront::Distribution",
+            "Properties": {
+                "DistributionConfig": {
+                    "Origins": [
+                        {
+                            "DomainName": {
+                                "Fn::GetAtt": [
+                                    "recipeBucket",
+                                    "DomainName"
+                                ]
+                            },
+                            "Id": "recipeS3Origin",
+                            "S3OriginConfig": {}
+                        }
+                    ],
+                    "Enabled": "true",
+                    "Comment": "gulp-recipe cloudfront",
+                    "Logging": {
+                        "IncludeCookies": "false",
+                        "Bucket": {
+                            "Fn::GetAtt": [
+                                "logsBucket",
+                                "DomainName"
+                            ]
+                        },
+                        "Prefix": "logs/gulp-recipe/cloudfront"
+                    },
+                    "DefaultCacheBehavior": {
+                        "AllowedMethods": [
+                            "DELETE",
+                            "GET",
+                            "HEAD",
+                            "OPTIONS",
+                            "PATCH",
+                            "POST",
+                            "PUT"
+                        ],
+                        "TargetOriginId": "recipeS3Origin",
+                        "ForwardedValues": {
+                            "QueryString": "false",
+                            "Cookies": {
+                                "Forward": "none"
+                            }
+                        },
+                        "ViewerProtocolPolicy": "redirect-to-https"
+                    },
+                    "ViewerCertificate": {
+                        "CloudFrontDefaultCertificate": true
+                    }
+                }
+            }
+        },
+        "recipeLoadBalancer": {
+            "Type": "AWS::ElasticLoadBalancing::LoadBalancer",
+            "Properties": {
+                "AvailabilityZones": [
+                    "us-east-1a"
+                ],
+                "Listeners": [
+                    {
+                        "LoadBalancerPort": "80",
+                        "InstancePort": "80",
+                        "Protocol": "HTTP"
+                    }
+                ],
+                "HealthCheck": {
+                    "Target": "HTTP:80/",
+                    "HealthyThreshold": "3",
+                    "UnhealthyThreshold": "5",
+                    "Interval": "30",
+                    "Timeout": "5"
+                }
+            }
+        },
+        "recipeServerElasticBeanstalk": {
+            "Type": "AWS::ElasticBeanstalk::Environment",
+            "Properties": {
+                "ApplicationName": String,
+                "CNAMEPrefix": String,
+                "Description": String,
+                "EnvironmentName": String,
+                "OptionSettings": [
+                    OptionSettings,
+                    .
+                    .
+                    .
+                ],
+                "SolutionStackName": String,
+                "Tags": [
+                    Resource
+                    Tag,
+                    .
+                    .
+                    .
+                ],
+                "TemplateName": String,
+                "Tier": Environment
+                Tier,
+                "VersionLabel": String
+            }
+        }
+    }
+}
