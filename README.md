@@ -1,2 +1,2 @@
-# gulp-recipe-server
-Server instance for gulp-recipe
+bitrecipe-server
+Server instance for bitrecipe

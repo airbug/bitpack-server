@@ -12,11 +12,11 @@
 // Imports
 //-------------------------------------------------------------------------------
 
-import GulpRecipeServer from '../js/GulpRecipeServer';
+import BitRecipeServer from '../js/BitRecipeServer';
 
 
 //-------------------------------------------------------------------------------
 // Script
 //-------------------------------------------------------------------------------
 
-GulpRecipeServer.start();
+BitRecipeServer.start();

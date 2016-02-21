@@ -1,7 +1,7 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
     "Resources" : {
-        "recipeDNSRecords": {
+        "gulpRecipeDNSRecords": {
             "Type": "AWS::Route53::RecordSetGroup",
             "Properties": {
                 "HostedZoneName": "gulprecipe.com.",
@@ -15,9 +15,27 @@
                             "192.168.0.1",
                             "192.168.0.2"
                         ]
+                    }
+                ]
+            }
+        },
+        "bitrecipeDNSRecords": {
+            "Type": "AWS::Route53::RecordSetGroup",
+            "Properties": {
+                "HostedZoneName": "bitrecipe.io.",
+                "Comment": "DNS records for bitrecipe.",
+                "RecordSets": [
+                    {
+                        "Name": "bitrecipe.io.",
+                        "Type": "A",
+                        "TTL": "900",
+                        "ResourceRecords": [
+                            "192.168.0.1",
+                            "192.168.0.2"
+                        ]
                     },
                     {
-                        "Name": "edge.gulprecipe.com.",
+                        "Name": "edge.bitrecipe.io.",
                         "Type": "CNAME",
                         "TTL": "900",
                         "ResourceRecords": [
@@ -32,7 +50,7 @@
                 ]
             }
         },
-        "recipeBucket": {
+        "bitrecipeBucket": {
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "AccessControl": "PublicRead",
@@ -89,7 +107,7 @@
                 ]
             }
         },
-        "recipeCloudfrontDistribution": {
+        "bitrecipeCloudfrontDistribution": {
             "Type": "AWS::CloudFront::Distribution",
             "Properties": {
                 "DistributionConfig": {
@@ -97,16 +115,16 @@
                         {
                             "DomainName": {
                                 "Fn::GetAtt": [
-                                    "recipeBucket",
+                                    "bitrecipeBucket",
                                     "DomainName"
                                 ]
                             },
-                            "Id": "recipeS3Origin",
+                            "Id": "bitrecipeS3Origin",
                             "S3OriginConfig": {}
                         }
                     ],
                     "Enabled": "true",
-                    "Comment": "gulp-recipe cloudfront",
+                    "Comment": "bitrecipe cloudfront",
                     "Logging": {
                         "IncludeCookies": "false",
                         "Bucket": {
@@ -115,7 +133,7 @@
                                 "DomainName"
                             ]
                         },
-                        "Prefix": "logs/gulp-recipe/cloudfront"
+                        "Prefix": "logs/bitrecipe/cloudfront"
                     },
                     "DefaultCacheBehavior": {
                         "AllowedMethods": [
@@ -127,7 +145,7 @@
                             "POST",
                             "PUT"
                         ],
-                        "TargetOriginId": "recipeS3Origin",
+                        "TargetOriginId": "bitrecipeS3Origin",
                         "ForwardedValues": {
                             "QueryString": "false",
                             "Cookies": {
@@ -142,7 +160,7 @@
                 }
             }
         },
-        "recipeLoadBalancer": {
+        "bitrecipeLoadBalancer": {
             "Type": "AWS::ElasticLoadBalancing::LoadBalancer",
             "Properties": {
                 "AvailabilityZones": [
@@ -162,33 +180,6 @@
                     "Interval": "30",
                     "Timeout": "5"
                 }
-            }
-        },
-        "recipeServerElasticBeanstalk": {
-            "Type": "AWS::ElasticBeanstalk::Environment",
-            "Properties": {
-                "ApplicationName": String,
-                "CNAMEPrefix": String,
-                "Description": String,
-                "EnvironmentName": String,
-                "OptionSettings": [
-                    OptionSettings,
-                    .
-                    .
-                    .
-                ],
-                "SolutionStackName": String,
-                "Tags": [
-                    Resource
-                    Tag,
-                    .
-                    .
-                    .
-                ],
-                "TemplateName": String,
-                "Tier": Environment
-                Tier,
-                "VersionLabel": String
             }
         }
     }

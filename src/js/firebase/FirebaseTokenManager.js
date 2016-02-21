@@ -21,7 +21,7 @@ import FirebaseTokenGenerator from 'firebase-token-generator';
  */
 const FirebaseTokenManager = Class.extend(Obj, {
 
-    _name: 'recipe.server.FirebaseTokenManager',
+    _name: 'bitrecipe.server.FirebaseTokenManager',
 
 
     //-------------------------------------------------------------------------------

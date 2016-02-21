@@ -410,6 +410,7 @@ path /users/{userId}/username {
 
 type User extends Entity  {
     email: String,
+    signedUp: Boolean,
     username: String
 }
 

@@ -1,9 +1,9 @@
 {
-    "name": "gulp-recipe-server",
+    "name": "bitrecipe-server",
     "version": "0.0.1",
     "private": true,
-    "description": "Server system for gulp-recipe",
-    "main": "./scripts/gulp-recipe-node.js",
+    "description": "Server system for bitrecipe",
+    "main": "./scripts/bitrecipe-node.js",
     "dependencies": {
         "aws-sdk": "2.2.33",
         "bugcore": "0.3.26",
@@ -15,7 +15,7 @@
         "s3-upload-stream": "1.0.7"
     },
     "scripts": {
-        "start": "node ./dist/scripts/gulp-recipe-server-start.js",
+        "start": "node ./dist/scripts/bitrecipe-server-start.js",
         "test": "gulp test"
     },
     "devDependencies": {

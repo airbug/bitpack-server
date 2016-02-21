@@ -10,7 +10,10 @@ import {
 import AWS from 'aws-sdk';
 import Config from 'config';
 import express from 'express';
-import GulpRecipe from 'gulp-recipe';
+import GulpRecipe, {
+    managers,
+    util
+} from 'gulp-recipe';
 import Api from './routes/Api';
 import FirebaseTokenManager from './firebase/FirebaseTokenManager';
 
@@ -20,8 +23,11 @@ import FirebaseTokenManager from './firebase/FirebaseTokenManager';
 //-------------------------------------------------------------------------------
 
 const {
+    PublishKeyManager
+} = managers;
+const {
     Firebase
-} = GulpRecipe.util;
+} = util;
 
 
 //-------------------------------------------------------------------------------
@@ -32,9 +38,9 @@ const {
  * @class
  * @extends {Obj}
  */
-const GulpRecipeServer = Class.extend(Obj, {
+const BitRecipeServer = Class.extend(Obj, {
 
-    _name: 'recipe.GulpRecipeServer',
+    _name: 'bitrecipe.BitRecipeServer',
 
 
     //-------------------------------------------------------------------------------
@@ -52,6 +58,7 @@ const GulpRecipeServer = Class.extend(Obj, {
                 return Firebase.authWithCustomToken(adminToken);
             })
             .then(() => {
+                this.disableCaches();
                 this.setupApp();
             })
             .catch((error) => {
@@ -69,11 +76,18 @@ const GulpRecipeServer = Class.extend(Obj, {
     /**
      * @private
      */
+    disableCaches() {
+        PublishKeyManager.disableCache();
+    },
+
+    /**
+     * @private
+     */
     setupApp() {
         const app = express();
         app.use('/', Api.routes());
         app.listen(4000, () => {
-            console.log('Example app listening on port 4000!');
+            console.log('BitRecipeServer listening on port 4000!');
         });
     }
 });
@@ -86,9 +100,9 @@ const GulpRecipeServer = Class.extend(Obj, {
 /**
  * @static
  * @private
- * @type {GulpRecipeServer}
+ * @type {BitRecipeServer}
  */
-GulpRecipeServer.instance        = null;
+BitRecipeServer.instance        = null;
 
 
 //-------------------------------------------------------------------------------
@@ -97,13 +111,13 @@ GulpRecipeServer.instance        = null;
 
 /**
  * @static
- * @return {GulpRecipeServer}
+ * @return {BitRecipeServer}
  */
-GulpRecipeServer.getInstance = function() {
-    if (GulpRecipeServer.instance === null) {
-        GulpRecipeServer.instance = new GulpRecipeServer();
+BitRecipeServer.getInstance = function() {
+    if (BitRecipeServer.instance === null) {
+        BitRecipeServer.instance = new BitRecipeServer();
     }
-    return GulpRecipeServer.instance;
+    return BitRecipeServer.instance;
 };
 
 
@@ -111,7 +125,7 @@ GulpRecipeServer.getInstance = function() {
 // Static Proxy
 //-------------------------------------------------------------------------------
 
-Proxy.proxy(GulpRecipeServer, Proxy.method(GulpRecipeServer.getInstance), [
+Proxy.proxy(BitRecipeServer, Proxy.method(BitRecipeServer.getInstance), [
     'start'
 ]);
 
@@ -120,4 +134,4 @@ Proxy.proxy(GulpRecipeServer, Proxy.method(GulpRecipeServer.getInstance), [
 // Exports
 //-------------------------------------------------------------------------------
 
-export default GulpRecipeServer;
+export default BitRecipeServer;

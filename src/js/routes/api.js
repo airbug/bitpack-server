@@ -12,7 +12,11 @@ import {
 } from 'bugcore';
 import AWS from 'aws-sdk';
 import express from 'express';
-import GulpRecipe from 'gulp-recipe';
+import {
+    core,
+    managers,
+    util
+} from 'gulp-recipe';
 
 
 //-------------------------------------------------------------------------------
@@ -20,11 +24,9 @@ import GulpRecipe from 'gulp-recipe';
 //-------------------------------------------------------------------------------
 
 const {
-    core,
-    data,
-    entities,
-    util
-} = GulpRecipe;
+    PublishKeyManager,
+    RecipeVersionManager
+} = managers;
 
 
 //-------------------------------------------------------------------------------
@@ -37,7 +39,7 @@ const {
  */
 const Api = Class.extend(Obj, {
 
-    _name: 'recipe.routes.Api',
+    _name: 'bitrecipe.routes.Api',
 
 
     //-------------------------------------------------------------------------------
@@ -120,41 +122,34 @@ const Api = Class.extend(Obj, {
     /**
      * @private
      * @param {string} key
-     * @return {Promise.<PublishKeyData>}
+     * @return {Promise.<PublishKeyEntity>}
      */
     loadPublishKey(key) {
-        return entities.PublishKey.get(key)
-            .then((snapshot) => {
-                if (snapshot.exists()) {
-                    return new data.PublishKeyData(snapshot.val());
-                }
-            });
+        return PublishKeyManager.get({key});
     },
 
     /**
      * @private
      * @param {string} recipeName
      * @param {string} versionNumber
-     * @return {Promise.<PublishKeyData>}
+     * @return {Promise.<RecipeVersionEntity>}
      */
     loadRecipeVersion(recipeName, versionNumber) {
-        return entities.RecipeVersion.get(recipeName, versionNumber)
-            .then((snapshot) => {
-                if (snapshot.exists()) {
-                    return new data.RecipeVersionData(snapshot.val());
-                }
-            });
+        return RecipeVersionManager.get({
+            recipeName,
+            recipeScope: 'public',
+            recipeType: 'gulp',
+            versionNumber
+        });
     },
 
     /**
      * @private
-     * @param {PublishKeyData} publishKeyData
+     * @param {PublishKeyEntity} publishKeyEntity
      */
-    markPublishKeyUsed(publishKeyData) {
-        return entities.PublishKey.update(publishKeyData.getKey(), {
+    markPublishKeyUsed(publishKeyEntity) {
+        return PublishKeyManager.update({ key: publishKeyEntity.getKey() }, {
             usedAt: util.Firebase.timestamp()
-        }).then(() => {
-            return publishKeyData;
         });
     },
 
@@ -229,7 +224,7 @@ const Api = Class.extend(Obj, {
             this.validateRecipeVersion(recipeVersionData);
             return this.uploadRecipePackage(publishKeyData, recipePackage)
                 .then((recipeUrl) => {
-                    return entities.RecipeVersion.updatePublished(publishKeyData.getRecipeName(), publishKeyData.getRecipeVersionNumber(), {
+                    return RecipeVersionManager.updatePublished(publishKeyData.getRecipeName(), publishKeyData.getRecipeVersionNumber(), {
                         published: true,
                         recipeHash: recipePackage.getRecipeHash(),
                         recipeUrl: recipeUrl
