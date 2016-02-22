@@ -11,6 +11,7 @@ import AWS from 'aws-sdk';
 import Config from 'config';
 import express from 'express';
 import GulpRecipe, {
+    controllers,
     managers,
     util
 } from 'gulp-recipe';
@@ -53,6 +54,7 @@ const BitRecipeServer = Class.extend(Obj, {
     start() {
         return GulpRecipe.context({})
             .then(() => {
+                controllers.ContextController.establishUserContext({ userId: 'bitRecipeServer'});
                 const adminToken = FirebaseTokenManager.getAdminToken();
                 AWS.config.update(Config.get('aws'));
                 return Firebase.authWithCustomToken(adminToken);
