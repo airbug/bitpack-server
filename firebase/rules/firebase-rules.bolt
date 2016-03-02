@@ -75,8 +75,8 @@ path /publishKey/ {
 path /publishKey/{publishKey} is PublishKey {
     write() {
         doesNotExist(this) &&
-        !isRecipeVersionPublished(this.recipeType, this.recipeScope, this.recipeName, this.recipeVersionNumber) &&
-        isCurrentUserRecipeCollaborator(this.recipeName)
+        !isPackVersionPublished(this.packType, this.packClass, this.packScope, this.packName, this.packVersionNumber) &&
+        isCurrentUserPackCollaborator(this.packName)
     }
     validate() { isKey(publishKey) }
 }
@@ -87,11 +87,12 @@ path /publishKey/{publishKey}/key {
 
 type PublishKey extends TimeStamped {
     key: Key,
-    recipeHash: RecipeHash,
-    recipeName: RecipeName,
-    recipeScope: RecipeScope,
-    recipeType: RecipeType,
-    recipeVersionNumber: RecipeVersionNumber,
+    packClas: PackClass,
+    packHash: PackHash,
+    packName: PackName,
+    packScope: PackScope,
+    packType: PackType,
+    packVersionNumber: PackVersionNumber,
     usedAt: Number | Null
 }
 
@@ -105,194 +106,213 @@ function isKey(value) {
 
 
 //-------------------------------------------------------------------------------
-// Recipes
+// Packs
 //-------------------------------------------------------------------------------
 
-path /recipes/{recipeType}/ {
-    validate() { recipeType == 'gulp' }
+path /packs/{packType}/ {
+    validate() { packType == 'recipe' }
 }
 
-path /recipes/{recipeType}/{recipeScope}/ {
+path /packs/{packType}/{packClass}/ {
+    validate() { packClass == 'gulp' }
+}
+
+path /packs/{packType}/{packClass}/{packScope}/ {
     read() { true }
-    validate() { recipeScope == 'public' }
+    validate() { packScope == 'public' }
 }
 
-path /recipes/{recipeType}/{recipeScope}/{recipeName}/info is Recipe {
+path /packs/{packType}/{packClass}/{packScope}/{packName}/info is Pack {
     write() {
         doesNotExist(this) ||
-        isCurrentUserRecipeOwner(recipeName) ||
+        isCurrentUserPackOwner(packType, packClass, packScope, packName) ||
         isCurrentUserAdmin()
     }
 }
 
-path /recipes/{recipeType}/{recipeScope}/{recipeName}/info/scope {
-    validate() { this == recipeScope }
+path /packs/{packType}/{packClass}/{packScope}/{packName}/info/class {
+    validate() { this == packClass }
 }
 
-path /recipes/{recipeType}/{recipeScope}/{recipeName}/info/name {
-    validate() { this == recipeName }
+path /packs/{packType}/{packClass}/{packScope}/{packName}/info/scope {
+    validate() { this == packScope }
 }
 
-path /recipes/{recipeType}/{recipeScope}/{recipeName}/info/type {
-    validate() { this == recipeType }
+path /packs/{packType}/{packClass}/{packScope}/{packName}/info/name {
+    validate() { this == packName }
 }
 
-type Recipe extends TimeStamped {
-    name: RecipeName,
-    scope: RecipeScope,
-    type: RecipeType
+path /packs/{packType}/{packClass}/{packScope}/{packName}/info/type {
+    validate() { this == packType }
 }
 
-type RecipeName extends String {
-    validate() { isRecipeName(this) }
+type Pack extends TimeStamped {
+    class: PackClass,
+    name: PackName,
+    scope: PackScope,
+    type: PackType
 }
 
-type RecipeScope extends String {
-    validate() { isRecipeScope(this) }
+type PackClass extends String {
+    validate() { isPackClass(this) }
 }
 
-type RecipeType extends String {
-    validate() { isRecipeType(this) }
+type PackName extends String {
+    validate() { isPackName(this) }
 }
 
-function isRecipeName(value) {
+type PackScope extends String {
+    validate() { isPackScope(this) }
+}
+
+type PackType extends String {
+    validate() { isPackType(this) }
+}
+
+function isPackClass(value) {
+    return value.test('gulp');
+}
+
+function isPackName(value) {
     return value.test(/^[a-z]+(?:[a-z0-9-][a-z0-9]+)*$/);
 }
 
-function isRecipeScope(value) {
+function isPackScope(value) {
     return value == 'public';
 }
 
-function isRecipeType(value) {
-    return value == 'gulp';
+function isPackType(value) {
+    return value == 'recipe';
 }
 
 
 //-------------------------------------------------------------------------------
-// RecipeCollaborators
+// PackCollaborators
 //-------------------------------------------------------------------------------
 
-path /recipes/{recipeType}/{recipeScope}/{recipeName}/collaborators {
+path /packs/{packType}/{packClass}/{packScope}/{packName}/collaborators {
     write() {
         doesNotExist(this) ||
-        isCurrentUserRecipeOwner(recipeName) ||
+        isCurrentUserPackOwner(packType, packClass, packScope, packName) ||
         isCurrentUserAdmin()
     }
 }
 
-path /recipes/{recipeType}/{recipeScope}/{recipeName}/collaborators/{userId} is RecipeCollaborator {
+path /packs/{packType}/{packClass}/{packScope}/{packName}/collaborators/{userId} is PackCollaborator {
     validate() { isExistingUserId(userId) }
     write() {
         isCurrentUserId(userId) && willNotExist(this)
     }
 }
 
-path /recipes/{recipeType}/{recipeScope}/{recipeName}/collaborators/{userId}/userId {
+path /packs/{packType}/{packClass}/{packScope}/{packName}/collaborators/{userId}/userId {
     validate() { this == userId }
 }
 
-type RecipeCollaborator extends TimeStamped {
+type PackCollaborator extends TimeStamped {
     owner: Boolean,
     userId: ExistingUserId
 }
 
-function isCurrentUserRecipeCollaborator(recipeType, recipeScope, recipeName) {
-    return isUserRecipeCollaborator(recipeType, recipeScope, recipeName, auth.uid);
+function isCurrentUserPackCollaborator(packType, packClass, packScope, packName) {
+    return isUserPackCollaborator(packType, packClass, packScope, packName, auth.uid);
 }
 
-function isCurrentUserRecipeOwner(recipeName) {
-    return isUserRecipeOwner(recipeType, recipeScope, recipeName, auth.uid);
+function isCurrentUserPackOwner(packType, packClass, packScope, packName) {
+    return isUserPackOwner(packType, packClass, packScope, packName, auth.uid);
 }
 
-function isUserRecipeCollaborator(recipeType, recipeScope, recipeName, userId) {
-    return root.recipes[recipeType][recipeScope][recipeName].collaborators[userId] !== null;
+function isUserPackCollaborator(packType, packClass, packScope, packName, userId) {
+    return root.packs[packType][packClass][packScope][packName].collaborators[userId] !== null;
 }
 
-function isUserRecipeOwner(recipeType, recipeScope, recipeName, userId) {
-    return root.recipes[recipeType][recipeScope][recipeName].collaborators[userId].owner === true;
+function isUserPackOwner(packType, packClass, packScope, packName, userId) {
+    return root.packs[packType][packClass][packScope][packName].collaborators[userId].owner === true;
 }
 
 
 //-------------------------------------------------------------------------------
-// RecipeVersionsInfo
+// PackVersionsInfo
 //-------------------------------------------------------------------------------
 
-path /recipes/{recipeType}/{recipeScope}/{recipeName}/versionsInfo is RecipeVersionsInfo {
-    write() { isCurrentUserRecipeCollaborator(recipeType, recipeScope, recipeName) }
+path /packs/{packType}/{packClass}/{packScope}/{packName}/versionsInfo is PackVersionsInfo {
+    write() { isCurrentUserPackCollaborator(packType, packClass, packScope, packName) }
 }
 
-path /recipes/{recipeType}/{recipeScope}/{recipeName}/versionsInfo/last {
+path /packs/{packType}/{packClass}/{packScope}/{packName}/versionsInfo/last {
     validate() {
-        isExistingRecipeVersionNumber(recipeType, recipeScope, recipeName, this) || (
+        isExistingPackVersionNumber(packType, packClass, packScope, packName, this) || (
             doesNotExist(this.parent()) && this == ''
         )
     }
 }
 
-path /recipes/{recipeType}/{recipeScope}/{recipeName}/versionsInfo/all/{versionNumber} is RecipeVersionNumber {
+path /packs/{packType}/{packClass}/{packScope}/{packName}/versionsInfo/all/{versionNumber} is PackVersionNumber {
     validate() {
         this == unescapePathPart(versionNumber) &&
-        willRecipeVersionExist(
-            this.parent().parent().parent().parent().parent().parent().parent(),
-            recipeType,
-            recipeScope,
-            recipeName,
+        willPackVersionExist(
+            this.parent().parent().parent().parent().parent().parent().parent().parent(),
+            packType,
+            packClass,
+            packScope,
+            packName,
             unescapePathPart(versionNumber))
     }
 }
 
-type RecipeVersionsInfo extends TimeStamped {
-    last: RecipeVersionNumber
+type PackVersionsInfo extends TimeStamped {
+    last: PackVersionNumber
 }
 
-function willRecipeVersionInfoExist(newRoot, recipeType, recipeScope, recipeName, recipeVersionNumber) {
-    return newRoot.recipes[recipeType][recipeScope][recipeName].versionsInfo.all[escapePathPart(recipeVersionNumber)] != null;
+function willPackVersionInfoExist(newRoot, packType, packClass, packScope, packName, packVersionNumber) {
+    return newRoot.packs[packType][packClass][packScope][packName].versionsInfo.all[escapePathPart(packVersionNumber)] != null;
 }
 
 
 //-------------------------------------------------------------------------------
-// RecipeVersions
+// PackVersions
 //-------------------------------------------------------------------------------
 
-path /recipes/{recipeType}/{recipeScope}/{recipeName}/versions/{versionNumber} is RecipeVersion {
+path /packs/{packType}/{packClass}/{packScope}/{packName}/versions/{versionNumber} is PackVersion {
     validate() {
-        isRecipeVersionNumber(unescapePathPart(versionNumber)) &&
-        willRecipeVersionInfoExist(
-            this.parent().parent().parent().parent().parent().parent(),
-            recipeType,
-            recipeScope,
-            recipeName,
+        isPackVersionNumber(unescapePathPart(versionNumber)) &&
+        willPackVersionInfoExist(
+            this.parent().parent().parent().parent().parent().parent().parent(),
+            packType,
+            packClass,
+            packScope,
+            packName,
             unescapePathPart(versionNumber))
     }
     write() {
         (
-            doesNotExist(this) && isCurrentUserRecipeCollaborator(recipeType, recipeScope, this)
+            doesNotExist(this) && isCurrentUserPackCollaborator(packType, packClass, packScope, this)
         ) || (
-            isCurrentUserRecipeOwner(this)
+            isCurrentUserPackOwner(packType, packClass, packScope, packName)
         ) || (
             isCurrentUserAdmin()
         )
     }
 }
 
-type RecipeVersion extends TimeStamped {
-    hash: RecipeHash,
+type PackVersion extends TimeStamped {
+    hash: PackHash,
     published: Boolean,
     semanticVersion: SemanticVersion,
     url: String,
-    versionNumber: RecipeVersionNumber
+    versionNumber: PackVersionNumber
 }
 
-path /recipes/{recipeType}/{recipeScope}/{recipeName}/versions/{versionNumber}/versionNumber {
+path /packs/{packType}/{packClass}/{packScope}/{packName}/versions/{versionNumber}/versionNumber {
     validate() { this == unescapePathPart(versionNumber) }
 }
 
-type RecipeHash extends String {
-    validate() { isRecipeHash(this) }
+type PackHash extends String {
+    validate() { isPackHash(this) }
 }
 
-type RecipeVersionNumber extends String {
-    validate() { isRecipeVersionNumber(this) }
+type PackVersionNumber extends String {
+    validate() { isPackVersionNumber(this) }
 }
 
 type SemanticVersion {
@@ -325,25 +345,25 @@ function isBuildString(value) {
     return value.test(/^([0-9A-Za-z-][0-9A-Za-z-]*)$/);
 }
 
-function isExistingRecipeVersionNumber(recipeType, recipeScope, recipeName, value) {
-    return isRecipeVersionNumber(value) && root.recipes[recipeType][recipeScope][recipeName].versions[escapePathPart(value)] != null;
+function isExistingPackVersionNumber(packType, packClass, packScope, packName, value) {
+    return isPackVersionNumber(value) && root.packs[packType][packClass][packScope][packName].versions[escapePathPart(value)] != null;
 }
 
 function isPrereleaseString(value) {
     return value.test(/^([0-9]|([1-9A-Za-z-][0-9A-Za-z-]*))$/);
 }
 
-function isRecipeHash(value) {
+function isPackHash(value) {
     //TODO BRN:
     return value.length > 32;
 }
 
-function isRecipeVersionNumber(value) {
+function isPackVersionNumber(value) {
     return isVersionString(value);
 }
 
-function isRecipeVersionPublished(recipeType, recipeScope, recipeName, recipeVersionNumber) {
-    return root.recipes[recipeType][recipeScope][recipeName].versions[recipeVersionNumber].published === true;
+function isPackVersionPublished(packType, packClass, packScope, packName, packVersionNumber) {
+    return root.packs[packType][packClass][packScope][packName].versions[packVersionNumber].published === true;
 }
 
 function isSemanticVersionString(value) {
@@ -354,8 +374,8 @@ function isVersionString(value) {
     return value.test(/^[0-9]\.[0-9]\.[0-9](-([0-9]|([1-9A-Za-z-][0-9A-Za-z-]*))(\.([0-9]|([1-9A-Za-z-][0-9A-Za-z-]*)))*)?$/);
 }
 
-function willRecipeVersionExist(newRoot, recipeType, recipeScope, recipeName, recipeVersionNumber) {
-    return newRoot.recipes[recipeType][recipeScope][recipeName].versions[escapePathPart(recipeVersionNumber)] != null;
+function willPackVersionExist(newRoot, packType, packClass, packScope, packName, packVersionNumber) {
+    return newRoot.packs[packType][packClass][packScope][packName].versions[escapePathPart(packVersionNumber)] != null;
 }
 
 

@@ -19,14 +19,14 @@
                 ]
             }
         },
-        "bitrecipeDNSRecords": {
+        "bitpackDNSRecords": {
             "Type": "AWS::Route53::RecordSetGroup",
             "Properties": {
-                "HostedZoneName": "bitrecipe.io.",
-                "Comment": "DNS records for bitrecipe.",
+                "HostedZoneName": "bitpack.io.",
+                "Comment": "DNS records for bitpack.",
                 "RecordSets": [
                     {
-                        "Name": "bitrecipe.io.",
+                        "Name": "bitpack.io.",
                         "Type": "A",
                         "TTL": "900",
                         "ResourceRecords": [
@@ -35,7 +35,7 @@
                         ]
                     },
                     {
-                        "Name": "edge.bitrecipe.io.",
+                        "Name": "edge.bitpack.io.",
                         "Type": "CNAME",
                         "TTL": "900",
                         "ResourceRecords": [
@@ -50,7 +50,7 @@
                 ]
             }
         },
-        "bitrecipeBucket": {
+        "bitpackBucket": {
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "AccessControl": "PublicRead",
@@ -58,7 +58,7 @@
                     "DestinationBucketName": {
                         "Ref": "logsBucket"
                     },
-                    "LogFilePrefix": "logs/bitrecipe/S3"
+                    "LogFilePrefix": "logs/bitpack/S3"
                 }
             },
             "DeletionPolicy": "Retain"
@@ -107,7 +107,7 @@
                 ]
             }
         },
-        "bitrecipeCloudfrontDistribution": {
+        "bitpackCloudfrontDistribution": {
             "Type": "AWS::CloudFront::Distribution",
             "Properties": {
                 "DistributionConfig": {
@@ -115,16 +115,16 @@
                         {
                             "DomainName": {
                                 "Fn::GetAtt": [
-                                    "bitrecipeBucket",
+                                    "bitpackBucket",
                                     "DomainName"
                                 ]
                             },
-                            "Id": "bitrecipeS3Origin",
+                            "Id": "bitpackS3Origin",
                             "S3OriginConfig": {}
                         }
                     ],
                     "Enabled": "true",
-                    "Comment": "bitrecipe cloudfront",
+                    "Comment": "bitpack cloudfront",
                     "Logging": {
                         "IncludeCookies": "false",
                         "Bucket": {
@@ -133,7 +133,7 @@
                                 "DomainName"
                             ]
                         },
-                        "Prefix": "logs/bitrecipe/cloudfront"
+                        "Prefix": "logs/bitpack/cloudfront"
                     },
                     "DefaultCacheBehavior": {
                         "AllowedMethods": [
@@ -145,7 +145,7 @@
                             "POST",
                             "PUT"
                         ],
-                        "TargetOriginId": "bitrecipeS3Origin",
+                        "TargetOriginId": "bitpackS3Origin",
                         "ForwardedValues": {
                             "QueryString": "false",
                             "Cookies": {
@@ -160,7 +160,7 @@
                 }
             }
         },
-        "bitrecipeLoadBalancer": {
+        "bitpackLoadBalancer": {
             "Type": "AWS::ElasticLoadBalancing::LoadBalancer",
             "Properties": {
                 "AvailabilityZones": [

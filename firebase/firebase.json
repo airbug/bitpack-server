@@ -1,5 +1,5 @@
 {
-    "firebase": "gulp-recipe",
+    "firebase": "bitpack",
     "ignore": [
         "firebase.json",
         "**/.*",

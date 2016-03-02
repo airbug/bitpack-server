@@ -1,25 +1,16 @@
-'use strict'; //eslint-disable-line strict
-
 //-------------------------------------------------------------------------------
 // Requires
 //-------------------------------------------------------------------------------
 
-const bugcore           = require('bugcore');
-const config            = require('config');
-const gulp              = require('gulp');
-const babel             = require('gulp-babel');
-const cloudformation    = require('gulp-cloudformation');
-const eslint            = require('gulp-eslint');
-const jest              = require('gulp-jest-iojs');
-const sourcemaps        = require('gulp-sourcemaps');
-const util              = require('gulp-util');
-
-
-//-------------------------------------------------------------------------------
-// Simplify references
-//-------------------------------------------------------------------------------
-
-const _                 = bugcore.ObjectUtil;
+import { ObjectUtil as _ } from 'bugcore';
+import config from 'config';
+import gulp from 'gulp';
+import babel from 'gulp-babel';
+import cloudformation from 'gulp-cloudformation';
+import eslint from 'gulp-eslint';
+import jest from 'gulp-jest-iojs';
+import sourcemaps from 'gulp-sourcemaps';
+import util from'gulp-util';
 
 
 //-------------------------------------------------------------------------------

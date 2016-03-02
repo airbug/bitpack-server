@@ -12,11 +12,11 @@
 // Imports
 //-------------------------------------------------------------------------------
 
-import BitRecipeServer from '../js/BitRecipeServer';
+import BitPackServer from '../js/BitPackServer';
 
 
 //-------------------------------------------------------------------------------
 // Script
 //-------------------------------------------------------------------------------
 
-BitRecipeServer.start();
+BitPackServer.start();

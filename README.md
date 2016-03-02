@@ -1,2 +1,2 @@
-bitrecipe-server
-Server instance for bitrecipe
+bitpack-server
+Server instance for bitpack

@@ -21,7 +21,7 @@ import FirebaseTokenGenerator from 'firebase-token-generator';
  */
 const FirebaseTokenManager = Class.extend(Obj, {
 
-    _name: 'bitrecipe.server.FirebaseTokenManager',
+    _name: 'bitpack.server.FirebaseTokenManager',
 
 
     //-------------------------------------------------------------------------------
@@ -78,7 +78,7 @@ const FirebaseTokenManager = Class.extend(Obj, {
      */
     generateAdminToken() {
         this.adminToken = this.tokenGenerator.createToken({
-            uid: 'recipeserver'
+            uid: 'BitPackServer'
         }, {
             admin: true,
             expires: ((new Date()).getTime() / 1000) + (60 * 60 * 24 * 30)
