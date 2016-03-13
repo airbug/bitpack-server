@@ -14,7 +14,7 @@ import express from 'express';
 import {
     Firebase,
     PackPackage,
-    PackVersionManager
+    PackVersionManager,
     PublishKeyManager
 } from 'bitpack';
 
@@ -81,9 +81,11 @@ const Api = Class.extend(Obj, {
 
     /**
      * @param {BitPack} bitPack
+     * @return {Api}
      */
     setBitPack(bitPack) {
         this.bitPack = bitPack;
+        return this;
     },
 
     /**
@@ -95,9 +97,11 @@ const Api = Class.extend(Obj, {
 
     /**
      * @param {ContextChain} contextChain
+     * @return {Api}
      */
     setContextChain(contextChain) {
         this.contextChain = contextChain;
+        return this;
     },
 
 
@@ -180,9 +184,10 @@ const Api = Class.extend(Obj, {
     /**
      * @private
      * @param {PublishKeyEntity} publishKeyEntity
+     * @return {PublishKeyEntity}
      */
     async markPublishKeyUsed(publishKeyEntity) {
-        await PublishKeyManager.update(this.contextChain, { key: publishKeyEntity.getKey() }, {
+        return await PublishKeyManager.update(this.contextChain, { key: publishKeyEntity.getKey() }, {
             usedAt: Firebase.timestamp()
         });
     },
@@ -229,9 +234,9 @@ const Api = Class.extend(Obj, {
         if (!TypeUtil.isString(key)) {
             throw Throwables.exception('BAD_AUTHORIZATION', {}, 'Publish key could not be parsed');
         }
-        const publishKeyEntity = await this.loadPublishKey(key);
+        let publishKeyEntity = await this.loadPublishKey(key);
         this.validatePublishKey(publishKeyEntity);
-        const publishKeyEntity = await this.markPublishKeyUsed(publishKeyEntity);
+        publishKeyEntity = await this.markPublishKeyUsed(publishKeyEntity);
 
         // TODO PackServer
         // unpack stream to...
@@ -239,11 +244,17 @@ const Api = Class.extend(Obj, {
         // - validate pack version
 
         const packPackage = await PackPackage.fromStream(packPackageStream);
-        await this.validatePackPackage(publishKeyEntity, packPackage);
-        const packVersionEntity = this.loadPackVersion(publishKeyEntity.getPackType(), publishKeyEntity.getPackClass(), publishKeyEntity.getPackScope(), publishKeyEntity.getPackName(), publishKeyEntity.getPackVersionNumber());
+        this.validatePackPackage(publishKeyEntity, packPackage);
+        const packVersionEntity = await this.loadPackVersion(publishKeyEntity.getPackType(), publishKeyEntity.getPackClass(), publishKeyEntity.getPackScope(), publishKeyEntity.getPackName(), publishKeyEntity.getPackVersionNumber());
         this.validatePackVersion(packVersionEntity);
-        const packUrl = await this.uploadPackPackage(publishKeyEntity, packPackage)
-        return await PackVersionManager.updatePublished(publishKeyEntity.getPackName(), publishKeyEntity.getPackVersionNumber(), {
+        const packUrl = await this.uploadPackPackage(publishKeyEntity, packPackage);
+        return await PackVersionManager.updatePublished(this.contextChain, {
+            packClass: publishKeyEntity.getPackClass(),
+            packName: publishKeyEntity.getPackName(),
+            packScope: publishKeyEntity.getPackScope(),
+            packType: publishKeyEntity.getPackType(),
+            versionNumber: publishKeyEntity.getPackVersionNumber()
+        }, {
             published: true,
             packHash: packPackage.getPackHash(),
             packUrl: packUrl
@@ -261,11 +272,12 @@ const Api = Class.extend(Obj, {
             const s3Stream = require('s3-upload-stream')(new AWS.S3());
             const upload = s3Stream.upload({
                 ACL: 'public-read',
-                Bucket: 'gulp-pack',
+                Bucket: 'bitpack',
                 ContentType: 'application/x-compressed',
-                Key: 'packs/' + publishKeyEntity.getPackType() + '/' + publishKeyEntity.getPackScope() + '/'
-                    + publishKeyEntity.getPackName() + '/' + publishKeyEntity.getPackVersionNumber() + '/' +
-                    publishKeyEntity.getPackType() + '-' + publishKeyEntity.getPackScope() + '-' +
+                Key: 'packs/' + publishKeyEntity.getPackType() + '/' + publishKeyEntity.getPackClass() + '/' +
+                    publishKeyEntity.getPackScope() + '/' + publishKeyEntity.getPackName() + '/' +
+                    publishKeyEntity.getPackVersionNumber() + '/' + publishKeyEntity.getPackType() + '-' +
+                    publishKeyEntity.getPackClass() + '-' + publishKeyEntity.getPackScope() + '-' +
                     publishKeyEntity.getPackName() + '-' + publishKeyEntity.getPackVersionNumber() + '.tgz',
                 ServerSideEncryption: 'AES256'
             });

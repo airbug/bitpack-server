@@ -10,25 +10,13 @@ import {
 import AWS from 'aws-sdk';
 import Config from 'config';
 import express from 'express';
-import BitPack, {
-    controllers,
-    managers,
-    util
+import {
+    BitPack,
+    Firebase,
+    PublishKeyManager
 } from 'bitpack';
 import Api from './routes/Api';
 import FirebaseTokenManager from './firebase/FirebaseTokenManager';
-
-
-//-------------------------------------------------------------------------------
-// Simplify References
-//-------------------------------------------------------------------------------
-
-const {
-    PublishKeyManager
-} = managers;
-const {
-    Firebase
-} = util;
 
 
 //-------------------------------------------------------------------------------
@@ -93,7 +81,9 @@ const BitPackServer = Class.extend(Obj, {
         const _this = this._super();
         if (_this) {
             this.context();
-            _this.api.setBitPack(_this.bitPack);
+            _this.api
+                .setBitPack(_this.bitPack)
+                .setContextChain(this.contextChain);
         }
         return _this;
     },
@@ -110,7 +100,8 @@ const BitPackServer = Class.extend(Obj, {
         try {
             const adminToken = FirebaseTokenManager.getAdminToken();
             AWS.config.update(Config.get('aws'));
-            await Firebase.authWithCustomToken(adminToken);
+            this.bitPack.getConfigController().setConfigOverride('firebaseUrl', Config.get('firebaseUrl'));
+            await Firebase.authWithCustomToken(this.contextChain, adminToken);
             this.disableCaches();
             this.setupApp();
         } catch(error) {
@@ -129,6 +120,9 @@ const BitPackServer = Class.extend(Obj, {
         this.contextChain = this.bitPack.getContextController().generateContextChain();
         this.bitPack.getContextController().establishPackTypeContext(this.contextChain, {
             packType: this.bitPack.getPackType()
+        });
+        this.bitPack.getContextController().establishFirebaseContext(this.contextChain, {
+            firebaseUrl: Config.get('firebaseUrl')
         });
         this.bitPack.getContextController().establishExecContext(this.contextChain, {
             execPath: '.',
@@ -149,7 +143,7 @@ const BitPackServer = Class.extend(Obj, {
      */
     setupApp() {
         const app = express();
-        app.use('/', Api.routes());
+        app.use('/', this.api.routes());
         app.listen(4000, () => {
             console.log('BitPackServer listening on port 4000!');
         });

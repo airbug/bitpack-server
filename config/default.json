@@ -1,3 +1,5 @@
 {
-    "debug": false
+    "debug": false,
+    "firebaseUrl": "https://bitpack.firebaseio.com",
+    "firebaseSecret": "htZUcWkgtjT0hZRnvWbP0okuMzExX6fYuqd9mIOz"
 }
